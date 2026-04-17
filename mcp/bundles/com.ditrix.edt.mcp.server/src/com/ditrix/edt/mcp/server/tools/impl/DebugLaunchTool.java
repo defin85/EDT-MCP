@@ -9,11 +9,10 @@ package com.ditrix.edt.mcp.server.tools.impl;
 import java.util.Map;
 import java.util.Optional;
 
-import org.eclipse.core.resources.IProject;
-import org.eclipse.core.runtime.IProgressMonitor;
-import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.resources.IWorkspace;
 import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.ILaunchConfiguration;
@@ -21,20 +20,22 @@ import org.eclipse.debug.core.ILaunchConfigurationType;
 import org.eclipse.debug.core.ILaunchManager;
 import org.eclipse.swt.widgets.Display;
 
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.IInfobaseSynchronizationManager;
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseEqualityState;
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseSynchronizationException;
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseSynchronizationState;
 import com.ditrix.edt.mcp.server.Activator;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
 import com.e1c.g5.dt.applications.ApplicationException;
-import com.e1c.g5.dt.applications.ApplicationUpdateState;
-import com.e1c.g5.dt.applications.ApplicationUpdateType;
-import com.e1c.g5.dt.applications.ExecutionContext;
 import com.e1c.g5.dt.applications.IApplication;
 import com.e1c.g5.dt.applications.IApplicationManager;
+import com.e1c.g5.dt.applications.infobases.IInfobaseApplication;
 
-import org.eclipse.swt.widgets.Shell;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
@@ -138,6 +139,8 @@ public class DebugLaunchTool implements IMcpTool
             
             // Verify application exists and get its name
             IApplicationManager appManager = Activator.getDefault().getApplicationManager();
+            IInfobaseSynchronizationManager synchronizationManager = Activator.getDefault()
+                    .getInfobaseSynchronizationManager();
             String applicationName = applicationId; // Default to ID if can't get name
             IApplication application = null;
             
@@ -166,46 +169,36 @@ public class DebugLaunchTool implements IMcpTool
             {
                 try
                 {
-                    ApplicationUpdateState updateState = appManager.getUpdateState(application);
-                    
-                    // Only update if needed
-                    if (updateState != ApplicationUpdateState.UPDATED && 
-                        updateState != ApplicationUpdateState.BEING_UPDATED)
+                    if (synchronizationManager == null)
+                    {
+                        return ToolResult.error("IInfobaseSynchronizationManager service is not available").toJson(); //$NON-NLS-1$
+                    }
+
+                    IInfobaseApplication infobaseApplication = InfobaseSyncUtils.asInfobaseApplication(application);
+                    if (infobaseApplication == null)
+                    {
+                        return ToolResult.error("Application is not an infobase application: " + applicationId) //$NON-NLS-1$
+                                .toJson();
+                    }
+
+                    InfobaseSynchronizationState synchronizationState = synchronizationManager
+                            .getSynchronizationState(project, infobaseApplication.getInfobase());
+                    InfobaseEqualityState equalityState = synchronizationManager
+                            .getEqualityState(project, infobaseApplication.getInfobase());
+                    String updateState = InfobaseSyncUtils.deriveUpdateState(synchronizationState, equalityState);
+
+                    if (!"UPDATED".equals(updateState) && !"BEING_UPDATED".equals(updateState)) //$NON-NLS-1$ //$NON-NLS-2$
                     {
                         Activator.logInfo("Updating database before launch: project=" + projectName + //$NON-NLS-1$
                                 ", application=" + applicationId); //$NON-NLS-1$
-                        
-                        // Create execution context with Shell
-                        ExecutionContext context = new ExecutionContext();
-                        Display display = Display.getDefault();
-                        if (display != null && !display.isDisposed())
-                        {
-                            final Shell[] shellHolder = new Shell[1];
-                            display.syncExec(() -> {
-                                shellHolder[0] = display.getActiveShell();
-                                if (shellHolder[0] == null)
-                                {
-                                    Shell[] shells = display.getShells();
-                                    if (shells.length > 0)
-                                    {
-                                        shellHolder[0] = shells[0];
-                                    }
-                                }
-                            });
-                            if (shellHolder[0] != null)
-                            {
-                                context.setProperty(ExecutionContext.ACTIVE_SHELL_NAME, shellHolder[0]);
-                            }
-                        }
-                        
-                        IProgressMonitor monitor = new NullProgressMonitor();
-                        ApplicationUpdateState stateAfter = appManager.update(application, 
-                                ApplicationUpdateType.INCREMENTAL, context, monitor);
-                        
-                        Activator.logInfo("Database update completed: stateAfter=" + stateAfter); //$NON-NLS-1$
+
+                        boolean updated = synchronizationManager.updateInfobase(project,
+                                infobaseApplication.getInfobase(), InfobaseSyncUtils.createUpdateCallback(true), true,
+                                new NullProgressMonitor());
+                        Activator.logInfo("Database update completed before launch: updated=" + updated); //$NON-NLS-1$
                     }
                 }
-                catch (ApplicationException e)
+                catch (ApplicationException | InfobaseSynchronizationException e)
                 {
                     Activator.logError("Error updating database before launch", e); //$NON-NLS-1$
                     // Return error but allow user to retry with updateBeforeLaunch=false

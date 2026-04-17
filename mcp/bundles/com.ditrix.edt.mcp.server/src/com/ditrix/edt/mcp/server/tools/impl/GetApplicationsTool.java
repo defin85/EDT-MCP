@@ -18,11 +18,15 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.IInfobaseSynchronizationManager;
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseEqualityState;
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseSynchronizationState;
 import com.e1c.g5.dt.applications.ApplicationException;
-import com.e1c.g5.dt.applications.ApplicationUpdateState;
 import com.e1c.g5.dt.applications.IApplication;
 import com.e1c.g5.dt.applications.IApplicationManager;
+import com.e1c.g5.dt.applications.infobases.IInfobaseApplication;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
@@ -44,7 +48,7 @@ public class GetApplicationsTool implements IMcpTool
     public String getDescription()
     {
         return "Get list of applications (infobases) for a project. " + //$NON-NLS-1$
-               "Returns application ID, name, type, and update state. " + //$NON-NLS-1$
+               "Returns application ID, name, type, and synchronization state. " + //$NON-NLS-1$
                "Application ID is required for update_database and debug_launch tools."; //$NON-NLS-1$
     }
     
@@ -112,6 +116,9 @@ public class GetApplicationsTool implements IMcpTool
             {
                 return ToolResult.error("IApplicationManager service is not available").toJson(); //$NON-NLS-1$
             }
+
+            IInfobaseSynchronizationManager synchronizationManager = Activator.getDefault()
+                    .getInfobaseSynchronizationManager();
             
             // Get applications for the project
             List<IApplication> applications = appManager.getApplications(project);
@@ -140,29 +147,20 @@ public class GetApplicationsTool implements IMcpTool
                     appObj.addProperty("type", app.getType().getId()); //$NON-NLS-1$
                 }
                 
-                // Add update state
-                try
+                IInfobaseApplication infobaseApplication = InfobaseSyncUtils.asInfobaseApplication(app);
+                if (synchronizationManager != null && infobaseApplication != null)
                 {
-                    ApplicationUpdateState updateState = appManager.getUpdateState(app);
-                    if (updateState != null)
-                    {
-                        appObj.addProperty("updateState", updateState.name()); //$NON-NLS-1$
-                        
-                        // Add human-readable description
-                        String stateDescription = getUpdateStateDescription(updateState);
-                        appObj.addProperty("updateStateDescription", stateDescription); //$NON-NLS-1$
-                    }
+                    InfobaseSynchronizationState synchronizationState = synchronizationManager
+                            .getSynchronizationState(project, infobaseApplication.getInfobase());
+                    InfobaseEqualityState equalityState = synchronizationManager
+                            .getEqualityState(project, infobaseApplication.getInfobase());
+                    String updateState = InfobaseSyncUtils.deriveUpdateState(synchronizationState, equalityState);
+
+                    appObj.addProperty("syncState", synchronizationState.name()); //$NON-NLS-1$
+                    appObj.addProperty("equalityState", equalityState.name()); //$NON-NLS-1$
+                    appObj.addProperty("updateState", updateState); //$NON-NLS-1$
+                    appObj.addProperty("updateStateDescription", InfobaseSyncUtils.describeUpdateState(updateState)); //$NON-NLS-1$
                 }
-                catch (ApplicationException e)
-                {
-                    Activator.logError("Error getting update state for application: " + app.getId(), e); //$NON-NLS-1$
-                    appObj.addProperty("updateState", "ERROR"); //$NON-NLS-1$ //$NON-NLS-2$
-                    appObj.addProperty("updateStateError", e.getMessage()); //$NON-NLS-1$
-                }
-                
-                // Add required version if present
-                app.getRequiredVersion().ifPresent(version -> 
-                    appObj.addProperty("requiredVersion", version)); //$NON-NLS-1$
                 
                 appsArray.add(appObj);
             }
@@ -198,31 +196,6 @@ public class GetApplicationsTool implements IMcpTool
         {
             Activator.logError("Error getting applications for project: " + projectName, e); //$NON-NLS-1$
             return ToolResult.error("Error getting applications: " + e.getMessage()).toJson(); //$NON-NLS-1$
-        }
-    }
-    
-    /**
-     * Returns human-readable description for update state.
-     * 
-     * @param state the update state
-     * @return description string
-     */
-    private String getUpdateStateDescription(ApplicationUpdateState state)
-    {
-        switch (state)
-        {
-            case UNKNOWN:
-                return "Unknown state"; //$NON-NLS-1$
-            case INCREMENTAL_UPDATE_REQUIRED:
-                return "Incremental update required"; //$NON-NLS-1$
-            case FULL_UPDATE_REQUIRED:
-                return "Full update required"; //$NON-NLS-1$
-            case UPDATED:
-                return "Up to date"; //$NON-NLS-1$
-            case BEING_UPDATED:
-                return "Currently being updated"; //$NON-NLS-1$
-            default:
-                return state.name();
         }
     }
 }

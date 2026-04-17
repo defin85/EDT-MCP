@@ -12,27 +12,26 @@ import java.util.Optional;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IWorkspace;
 import org.eclipse.core.resources.ResourcesPlugin;
-import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.NullProgressMonitor;
-import org.eclipse.swt.widgets.Display;
-import org.eclipse.swt.widgets.Shell;
 
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.IInfobaseSynchronizationManager;
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseEqualityState;
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseSynchronizationException;
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseSynchronizationState;
 import com.ditrix.edt.mcp.server.Activator;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
 import com.e1c.g5.dt.applications.ApplicationException;
-import com.e1c.g5.dt.applications.ApplicationUpdateState;
-import com.e1c.g5.dt.applications.ApplicationUpdateType;
-import com.e1c.g5.dt.applications.ExecutionContext;
 import com.e1c.g5.dt.applications.IApplication;
 import com.e1c.g5.dt.applications.IApplicationManager;
+import com.e1c.g5.dt.applications.infobases.IInfobaseApplication;
 
 /**
  * Tool to update database (infobase) for an application.
- * Supports full and incremental update modes.
  */
 public class UpdateDatabaseTool implements IMcpTool
 {
@@ -131,6 +130,13 @@ public class UpdateDatabaseTool implements IMcpTool
             {
                 return ToolResult.error("IApplicationManager service is not available").toJson(); //$NON-NLS-1$
             }
+
+            IInfobaseSynchronizationManager synchronizationManager = Activator.getDefault()
+                    .getInfobaseSynchronizationManager();
+            if (synchronizationManager == null)
+            {
+                return ToolResult.error("IInfobaseSynchronizationManager service is not available").toJson(); //$NON-NLS-1$
+            }
             
             // Find application by ID
             Optional<IApplication> appOpt = appManager.getApplication(project, applicationId);
@@ -141,76 +147,65 @@ public class UpdateDatabaseTool implements IMcpTool
             }
             
             IApplication application = appOpt.get();
-            
-            // Check current update state before proceeding
-            ApplicationUpdateState stateBefore = appManager.getUpdateState(application);
-            if (stateBefore == ApplicationUpdateState.BEING_UPDATED)
+
+            IInfobaseApplication infobaseApplication = InfobaseSyncUtils.asInfobaseApplication(application);
+            if (infobaseApplication == null)
             {
-                return ToolResult.error("Application is currently being updated. Please wait.").toJson(); //$NON-NLS-1$
+                return ToolResult.error("Application is not an infobase application: " + applicationId).toJson(); //$NON-NLS-1$
             }
-            
-            // Determine update type
-            ApplicationUpdateType updateType = fullUpdate 
-                    ? ApplicationUpdateType.FULL 
-                    : ApplicationUpdateType.INCREMENTAL;
-            
-            // Create execution context with Shell from UI thread
-            ExecutionContext context = new ExecutionContext();
-            
-            // Get Shell from Display and set it in context
-            Display display = Display.getDefault();
-            if (display != null && !display.isDisposed())
+
+            InfobaseSynchronizationState synchronizationStateBefore = synchronizationManager
+                    .getSynchronizationState(project, infobaseApplication.getInfobase());
+            InfobaseEqualityState equalityStateBefore = synchronizationManager
+                    .getEqualityState(project, infobaseApplication.getInfobase());
+            String updateStateBefore = InfobaseSyncUtils.deriveUpdateState(synchronizationStateBefore,
+                    equalityStateBefore);
+            if ("BEING_UPDATED".equals(updateStateBefore)) //$NON-NLS-1$
             {
-                final Shell[] shellHolder = new Shell[1];
-                display.syncExec(() -> {
-                    shellHolder[0] = display.getActiveShell();
-                    if (shellHolder[0] == null)
-                    {
-                        Shell[] shells = display.getShells();
-                        if (shells.length > 0)
-                        {
-                            shellHolder[0] = shells[0];
-                        }
-                    }
-                });
-                if (shellHolder[0] != null)
-                {
-                    context.setProperty(ExecutionContext.ACTIVE_SHELL_NAME, shellHolder[0]);
-                }
+                return ToolResult.error("Application is currently being synchronized. Please wait.").toJson(); //$NON-NLS-1$
             }
-            
+
+            String updateType = fullUpdate ? "FULL" : "INCREMENTAL"; //$NON-NLS-1$ //$NON-NLS-2$
             Activator.logInfo("Update database: project=" + projectName +  //$NON-NLS-1$
                     ", application=" + applicationId +  //$NON-NLS-1$
                     ", type=" + updateType +  //$NON-NLS-1$
                     ", autoRestructure=" + autoRestructure); //$NON-NLS-1$
             
-            // Create progress monitor
-            IProgressMonitor monitor = new NullProgressMonitor();
-            
-            // Perform update
-            ApplicationUpdateState stateAfter = appManager.update(application, updateType, context, monitor);
-            
-            // Build result
+            boolean updated = fullUpdate
+                    ? synchronizationManager.reloadInfobase(project, infobaseApplication.getInfobase(),
+                            InfobaseSyncUtils.createUpdateCallback(autoRestructure), true,
+                            new NullProgressMonitor())
+                    : synchronizationManager.updateInfobase(project, infobaseApplication.getInfobase(),
+                            InfobaseSyncUtils.createUpdateCallback(autoRestructure), true,
+                            new NullProgressMonitor());
+
+            InfobaseSynchronizationState synchronizationStateAfter = synchronizationManager
+                    .getSynchronizationState(project, infobaseApplication.getInfobase());
+            InfobaseEqualityState equalityStateAfter = synchronizationManager
+                    .getEqualityState(project, infobaseApplication.getInfobase());
+            String updateStateAfter = InfobaseSyncUtils.deriveUpdateState(synchronizationStateAfter,
+                    equalityStateAfter);
+
             ToolResult result = ToolResult.success()
                 .put("project", projectName) //$NON-NLS-1$
                 .put("applicationId", applicationId) //$NON-NLS-1$
                 .put("applicationName", application.getName()) //$NON-NLS-1$
-                .put("updateType", updateType.name()) //$NON-NLS-1$
-                .put("stateBefore", stateBefore.name()) //$NON-NLS-1$
-                .put("stateAfter", stateAfter.name()); //$NON-NLS-1$
-            
-            // Add status message based on result
-            if (stateAfter == ApplicationUpdateState.UPDATED)
+                .put("updateType", updateType) //$NON-NLS-1$
+                .put("updated", updated) //$NON-NLS-1$
+                .put("stateBefore", updateStateBefore) //$NON-NLS-1$
+                .put("stateAfter", updateStateAfter) //$NON-NLS-1$
+                .put("syncStateBefore", synchronizationStateBefore.name()) //$NON-NLS-1$
+                .put("syncStateAfter", synchronizationStateAfter.name()) //$NON-NLS-1$
+                .put("equalityStateBefore", equalityStateBefore.name()) //$NON-NLS-1$
+                .put("equalityStateAfter", equalityStateAfter.name()); //$NON-NLS-1$
+
+            if (updated)
             {
                 result.put("message", "Database updated successfully"); //$NON-NLS-1$ //$NON-NLS-2$
             }
-            else if (stateAfter == ApplicationUpdateState.BEING_UPDATED)
-            {
-                result.put("message", "Update in progress"); //$NON-NLS-1$ //$NON-NLS-2$
-            }
             else
             {
-                result.put("message", "Update completed with state: " + stateAfter.name()); //$NON-NLS-1$ //$NON-NLS-2$
+                result.put("message", "Database update was aborted or requires confirmation"); //$NON-NLS-1$ //$NON-NLS-2$
             }
             
             return result.toJson();
@@ -232,6 +227,11 @@ public class UpdateDatabaseTool implements IMcpTool
             }
             
             return errorResult.toJson();
+        }
+        catch (InfobaseSynchronizationException e)
+        {
+            Activator.logError("Error synchronizing infobase for application: " + applicationId, e); //$NON-NLS-1$
+            return ToolResult.error("Database synchronization failed: " + e.getMessage()).toJson(); //$NON-NLS-1$
         }
         catch (Exception e)
         {

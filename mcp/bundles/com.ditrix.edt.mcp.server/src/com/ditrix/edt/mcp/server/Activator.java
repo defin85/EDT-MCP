@@ -21,6 +21,7 @@ import com._1c.g5.v8.dt.core.platform.IV8ProjectManager;
 import com._1c.g5.v8.dt.lifecycle.IServicesOrchestrator;
 import com._1c.g5.v8.dt.md.refactoring.core.IMdRefactoringService;
 import com._1c.g5.v8.dt.navigator.providers.INavigatorContentProviderStateProvider;
+import com._1c.g5.v8.dt.platform.services.core.infobases.sync.IInfobaseSynchronizationManager;
 import com._1c.g5.v8.dt.validation.marker.IMarkerManager;
 import com.ditrix.edt.mcp.server.groups.IGroupService;
 import com.e1c.g5.dt.applications.IApplicationManager;
@@ -54,6 +55,7 @@ public class Activator extends AbstractUIPlugin
     private ServiceTracker<IServicesOrchestrator, IServicesOrchestrator> servicesOrchestratorTracker;
     private ServiceTracker<BmAwareResourceSetProvider, BmAwareResourceSetProvider> resourceSetProviderTracker;
     private ServiceTracker<IApplicationManager, IApplicationManager> applicationManagerTracker;
+    private ServiceTracker<IInfobaseSynchronizationManager, IInfobaseSynchronizationManager> infobaseSynchronizationManagerTracker;
     private ServiceTracker<INavigatorContentProviderStateProvider, INavigatorContentProviderStateProvider> navigatorStateProviderTracker;
     private ServiceTracker<IMdRefactoringService, IMdRefactoringService> mdRefactoringServiceTracker;
     
@@ -108,6 +110,9 @@ public class Activator extends AbstractUIPlugin
         
         applicationManagerTracker = new ServiceTracker<>(context, IApplicationManager.class, null);
         applicationManagerTracker.open();
+
+        infobaseSynchronizationManagerTracker = new ServiceTracker<>(context, IInfobaseSynchronizationManager.class, null);
+        infobaseSynchronizationManagerTracker.open();
         
         navigatorStateProviderTracker = new ServiceTracker<>(context, INavigatorContentProviderStateProvider.class, null);
         navigatorStateProviderTracker.open();
@@ -201,6 +206,11 @@ public class Activator extends AbstractUIPlugin
         {
             applicationManagerTracker.close();
             applicationManagerTracker = null;
+        }
+        if (infobaseSynchronizationManagerTracker != null)
+        {
+            infobaseSynchronizationManagerTracker.close();
+            infobaseSynchronizationManagerTracker = null;
         }
         if (navigatorStateProviderTracker != null)
         {
@@ -432,6 +442,20 @@ public class Activator extends AbstractUIPlugin
             return null;
         }
         return applicationManagerTracker.getService();
+    }
+
+    /**
+     * Returns the infobase synchronization manager.
+     *
+     * @return synchronization manager or null if not available
+     */
+    public IInfobaseSynchronizationManager getInfobaseSynchronizationManager()
+    {
+        if (infobaseSynchronizationManagerTracker == null)
+        {
+            return null;
+        }
+        return infobaseSynchronizationManagerTracker.getService();
     }
     
     /**
