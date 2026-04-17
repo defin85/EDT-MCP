@@ -9,11 +9,14 @@ package com.ditrix.edt.mcp.server.protocol;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import com.ditrix.edt.mcp.server.Activator;
 import com.ditrix.edt.mcp.server.McpServer;
 import com.ditrix.edt.mcp.server.UserSignal;
 import com.ditrix.edt.mcp.server.preferences.PreferenceConstants;
+import com.ditrix.edt.mcp.server.progress.ToolExecutionContext;
+import com.ditrix.edt.mcp.server.progress.ToolExecutionContextHolder;
 import com.ditrix.edt.mcp.server.protocol.jsonrpc.InitializeResult;
 import com.ditrix.edt.mcp.server.protocol.jsonrpc.JsonRpcRequest;
 import com.ditrix.edt.mcp.server.protocol.jsonrpc.JsonRpcResponse;
@@ -50,28 +53,27 @@ public class McpProtocolHandler
      */
     public String processRequest(String requestBody)
     {
+        return processRequest(requestBody, null, false, ToolExecutionContext.TRANSPORT_MODE_JSON);
+    }
+
+    /**
+     * Processes an MCP JSON-RPC request with HTTP transport metadata.
+     *
+     * @param requestBody the JSON request body
+     * @param sessionId MCP session id from transport layer
+     * @param acceptsSse whether the client accepts SSE responses
+     * @param transportMode current transport mode identifier
+     * @return JSON response with correct id from request
+     */
+    public String processRequest(String requestBody, String sessionId, boolean acceptsSse, String transportMode)
+    {
         Object requestId = 1; // Default id
         
         try
         {
             // Parse request using GsonProvider
             JsonRpcRequest request = parseRequest(requestBody);
-            if (request != null && request.getId() != null)
-            {
-                requestId = request.getId();
-                // Gson deserializes JSON numbers into Object fields as Double.
-                // Normalize whole-number Doubles to Long so "id":0 serializes
-                // back as 0 (not 0.0), which is required for JSON-RPC ID matching.
-                if (requestId instanceof Double)
-                {
-                    double d = (Double) requestId;
-                    if (!Double.isInfinite(d) && d == Math.floor(d)
-                        && d >= Long.MIN_VALUE && d <= Long.MAX_VALUE)
-                    {
-                        requestId = ((Double) requestId).longValue();
-                    }
-                }
-            }
+            requestId = normalizeRequestId(request);
             
             // Validate JSON-RPC version
             if (request == null || !McpConstants.JSONRPC_VERSION.equals(request.getJsonrpc()))
@@ -106,7 +108,7 @@ public class McpProtocolHandler
             // Check for tools/call method
             if (McpConstants.METHOD_TOOLS_CALL.equals(method))
             {
-                return handleToolCall(request, requestId);
+                return handleToolCall(request, requestId, sessionId, acceptsSse, transportMode);
             }
             
             // Method not found
@@ -138,7 +140,8 @@ public class McpProtocolHandler
     /**
      * Handles a tools/call request.
      */
-    private String handleToolCall(JsonRpcRequest request, Object requestId)
+    private String handleToolCall(JsonRpcRequest request, Object requestId, String sessionId, boolean acceptsSse,
+            String transportMode)
     {
         String toolName = request != null ? request.getToolName() : null;
         
@@ -165,10 +168,13 @@ public class McpProtocolHandler
         String result;
         try
         {
+            ToolExecutionContextHolder.set(createToolExecutionContext(request, requestId, tool.getName(), sessionId,
+                    acceptsSse, transportMode));
             result = tool.execute(params);
         }
         finally
         {
+            ToolExecutionContextHolder.clear();
             // Clear current tool name after execution
             if (server != null)
             {
@@ -234,6 +240,39 @@ public class McpProtocolHandler
                 }
                 return buildToolCallTextResponse(result, requestId);
         }
+    }
+
+    private ToolExecutionContext createToolExecutionContext(JsonRpcRequest request, Object requestId, String toolName,
+            String sessionId, boolean acceptsSse, String transportMode)
+    {
+        String normalizedTransportMode = transportMode != null ? transportMode
+                : (acceptsSse ? ToolExecutionContext.TRANSPORT_MODE_SSE : ToolExecutionContext.TRANSPORT_MODE_JSON);
+        return new ToolExecutionContext(requestId != null ? requestId.toString() : null, toolName, sessionId,
+                request != null ? request.getProgressToken() : null, acceptsSse, normalizedTransportMode,
+                UUID.randomUUID().toString());
+    }
+
+    private Object normalizeRequestId(JsonRpcRequest request)
+    {
+        Object requestId = 1L;
+        if (request == null || request.getId() == null)
+        {
+            return requestId;
+        }
+
+        requestId = request.getId();
+        // Gson deserializes JSON numbers into Object fields as Double.
+        // Normalize whole-number Doubles to Long so "id":0 serializes back as 0.
+        if (requestId instanceof Double)
+        {
+            double d = (Double) requestId;
+            if (!Double.isInfinite(d) && d == Math.floor(d)
+                && d >= Long.MIN_VALUE && d <= Long.MAX_VALUE)
+            {
+                return Long.valueOf(((Double) requestId).longValue());
+            }
+        }
+        return requestId;
     }
     
     /**

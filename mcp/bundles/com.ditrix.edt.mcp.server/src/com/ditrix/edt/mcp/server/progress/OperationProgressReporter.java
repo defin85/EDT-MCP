@@ -1,0 +1,208 @@
+/**
+ * MCP Server for EDT
+ * Copyright (C) 2025 DitriX (https://github.com/DitriXNew)
+ * Licensed under AGPL-3.0-or-later
+ */
+
+package com.ditrix.edt.mcp.server.progress;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
+
+/**
+ * Thread-safe mutable reporter for one active operation.
+ */
+public class OperationProgressReporter
+{
+    private static final int DEFAULT_RECENT_EVENT_LIMIT = 10;
+
+    private final int recentEventLimit;
+    private final Deque<ProgressEvent> recentEvents = new ArrayDeque<>();
+
+    private String operationId;
+    private String toolName;
+    private String stage;
+    private String message;
+    private Double progress;
+    private Double total;
+    private boolean indeterminate = true;
+    private String status;
+    private Instant startedAt;
+    private Instant lastUpdateAt;
+    private String requestId;
+    private String sessionId;
+    private Object progressToken;
+    private volatile Consumer<OperationProgressState> stateListener;
+
+    public OperationProgressReporter()
+    {
+        this(DEFAULT_RECENT_EVENT_LIMIT);
+    }
+
+    public OperationProgressReporter(int recentEventLimit)
+    {
+        this.recentEventLimit = recentEventLimit > 0 ? recentEventLimit : DEFAULT_RECENT_EVENT_LIMIT;
+    }
+
+    public synchronized OperationProgressState start(String operationId, String toolName, String stage, String message,
+            String requestId, String sessionId, Object progressToken)
+    {
+        recentEvents.clear();
+        this.operationId = hasText(operationId) ? operationId : UUID.randomUUID().toString();
+        this.toolName = toolName;
+        this.stage = stage;
+        this.message = message;
+        this.progress = null;
+        this.total = null;
+        this.indeterminate = true;
+        this.status = OperationProgressState.STATUS_RUNNING;
+        this.startedAt = Instant.now();
+        this.lastUpdateAt = startedAt;
+        this.requestId = requestId;
+        this.sessionId = sessionId;
+        this.progressToken = progressToken;
+        addEvent(lastUpdateAt, stage, message, null, null);
+        return publishSnapshot(snapshot());
+    }
+
+    public synchronized OperationProgressState stage(String stage, String message)
+    {
+        this.stage = stage;
+        this.message = message;
+        this.status = OperationProgressState.STATUS_RUNNING;
+        this.lastUpdateAt = Instant.now();
+        addEvent(lastUpdateAt, stage, message, progress, total);
+        return publishSnapshot(snapshot());
+    }
+
+    public synchronized OperationProgressState progress(double progress, Double total, String message)
+    {
+        if (!hasText(stage) && hasText(message))
+        {
+            this.stage = message;
+        }
+        this.progress = Double.valueOf(progress);
+        this.total = isKnownTotal(total) ? total : null;
+        this.indeterminate = !isKnownTotal(total);
+        this.message = message;
+        this.status = OperationProgressState.STATUS_RUNNING;
+        this.lastUpdateAt = Instant.now();
+        addEvent(lastUpdateAt, stage, message, this.progress, this.total);
+        return publishSnapshot(snapshot());
+    }
+
+    public synchronized OperationProgressState indeterminate(String stage, String message)
+    {
+        this.stage = stage;
+        this.message = message;
+        this.total = null;
+        this.indeterminate = true;
+        this.status = OperationProgressState.STATUS_RUNNING;
+        this.lastUpdateAt = Instant.now();
+        addEvent(lastUpdateAt, stage, message, progress, null);
+        return publishSnapshot(snapshot());
+    }
+
+    public synchronized OperationProgressState completed(String message)
+    {
+        this.message = message;
+        this.status = OperationProgressState.STATUS_COMPLETED;
+        this.lastUpdateAt = Instant.now();
+        addEvent(lastUpdateAt, stage, message, progress, total);
+        return publishSnapshot(snapshot());
+    }
+
+    public synchronized OperationProgressState failed(String message, Throwable error)
+    {
+        this.message = hasText(message) ? message : errorMessage(error);
+        this.status = OperationProgressState.STATUS_FAILED;
+        this.lastUpdateAt = Instant.now();
+        addEvent(lastUpdateAt, stage, this.message, progress, total);
+        return publishSnapshot(snapshot());
+    }
+
+    public synchronized void appendEvent(ProgressEvent event)
+    {
+        if (event == null)
+        {
+            return;
+        }
+        lastUpdateAt = event.getTimestamp() != null ? event.getTimestamp() : Instant.now();
+        addEvent(lastUpdateAt, event.getStage(), event.getMessage(), event.getProgress(), event.getTotal());
+        publishSnapshot(snapshot());
+    }
+
+    public void setStateListener(Consumer<OperationProgressState> stateListener)
+    {
+        this.stateListener = stateListener;
+    }
+
+    public synchronized OperationProgressState snapshot()
+    {
+        if (startedAt == null)
+        {
+            return null;
+        }
+        Instant snapshotTime = Instant.now();
+        long elapsedSeconds = Duration.between(startedAt, snapshotTime).getSeconds();
+        return new OperationProgressState(operationId, toolName, stage, message, progress, total, indeterminate,
+                status, startedAt, lastUpdateAt, elapsedSeconds, requestId, sessionId, progressToken,
+                new ArrayList<>(recentEvents));
+    }
+
+    public synchronized List<ProgressEvent> recentEvents()
+    {
+        return List.copyOf(new ArrayList<>(recentEvents));
+    }
+
+    private void addEvent(Instant timestamp, String stage, String message, Double progress, Double total)
+    {
+        recentEvents.addLast(new ProgressEvent(timestamp, stage, message, progress, total));
+        while (recentEvents.size() > recentEventLimit)
+        {
+            recentEvents.removeFirst();
+        }
+    }
+
+    private boolean isKnownTotal(Double total)
+    {
+        return total != null && total.doubleValue() > 0;
+    }
+
+    private static boolean hasText(String value)
+    {
+        return value != null && !value.isBlank();
+    }
+
+    private static String errorMessage(Throwable error)
+    {
+        if (error == null || error.getMessage() == null)
+        {
+            return null;
+        }
+        return error.getMessage();
+    }
+
+    private OperationProgressState publishSnapshot(OperationProgressState snapshot)
+    {
+        Consumer<OperationProgressState> listener = stateListener;
+        if (listener != null && snapshot != null)
+        {
+            try
+            {
+                listener.accept(snapshot);
+            }
+            catch (RuntimeException e)
+            {
+                // Progress listeners must not break tool execution.
+            }
+        }
+        return snapshot;
+    }
+}

@@ -70,6 +70,9 @@ public final class McpConstants
     
     /** Initialized notification */
     public static final String METHOD_INITIALIZED = "notifications/initialized"; //$NON-NLS-1$
+
+    /** Progress notification */
+    public static final String METHOD_NOTIFICATION_PROGRESS = "notifications/progress"; //$NON-NLS-1$
     
     /** Tools list method */
     public static final String METHOD_TOOLS_LIST = "tools/list"; //$NON-NLS-1$

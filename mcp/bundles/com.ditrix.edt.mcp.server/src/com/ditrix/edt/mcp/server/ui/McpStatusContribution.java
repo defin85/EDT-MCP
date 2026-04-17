@@ -7,6 +7,9 @@
 package com.ditrix.edt.mcp.server.ui;
 
 import java.io.IOException;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.MouseAdapter;
@@ -31,6 +34,8 @@ import com.ditrix.edt.mcp.server.McpServer;
 import com.ditrix.edt.mcp.server.UpdateChecker;
 import com.ditrix.edt.mcp.server.UserSignal;
 import com.ditrix.edt.mcp.server.preferences.PreferenceConstants;
+import com.ditrix.edt.mcp.server.progress.OperationProgressState;
+import com.ditrix.edt.mcp.server.progress.ProgressEvent;
 import com.ditrix.edt.mcp.server.protocol.McpConstants;
 
 /**
@@ -55,6 +60,13 @@ public class McpStatusContribution extends WorkbenchWindowControlContribution
     
     /** Font size scaling factor for status bar text */
     private static final double FONT_SIZE_SCALE = 0.9;
+
+    private static final int STATUS_DETAIL_MAX_LENGTH = 44;
+    private static final int COUNTER_STAGE_MAX_LENGTH = 10;
+    private static final int TOOLTIP_EVENT_LIMIT = 5;
+
+    private static final DateTimeFormatter TOOLTIP_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss") //$NON-NLS-1$
+            .withZone(ZoneId.systemDefault());
     
     private Composite container;
     private Label circleLabel;
@@ -514,9 +526,12 @@ public class McpStatusContribution extends WorkbenchWindowControlContribution
         boolean running = server != null && server.isRunning();
         long requestCount = server != null ? server.getRequestCount() : 0;
         int port = server != null ? server.getPort() : 0;
-        String currentTool = server != null ? server.getCurrentToolName() : null;
-        boolean isExecuting = currentTool != null;
-        long executionSeconds = server != null ? server.getToolExecutionSeconds() : 0;
+        OperationProgressState activeOperation = server != null ? server.getActiveOperationSnapshot() : null;
+        String currentTool = activeOperation != null ? activeOperation.getToolName()
+                : (server != null ? server.getCurrentToolName() : null);
+        boolean isExecuting = activeOperation != null || currentTool != null;
+        long executionSeconds = activeOperation != null ? activeOperation.getElapsedSeconds()
+                : (server != null ? server.getToolExecutionSeconds() : 0);
         
         // Toggle blink state for animation effect
         blinkState = !blinkState;
@@ -540,11 +555,8 @@ public class McpStatusContribution extends WorkbenchWindowControlContribution
         {
             if (isExecuting)
             {
-                // Add MCP: prefix and truncate tool name if too long
-                String displayName = currentTool.length() > TOOL_NAME_MAX_LENGTH 
-                    ? "MCP: " + currentTool.substring(0, TOOL_NAME_MAX_LENGTH - 3) + "..." //$NON-NLS-1$ //$NON-NLS-2$
-                    : "MCP: " + currentTool; //$NON-NLS-1$
-                statusLabel.setText(displayName);
+                statusLabel.setText(activeOperation != null ? buildOperationStatusLabel(activeOperation)
+                        : buildLegacyStatusLabel(currentTool));
             }
             else
             {
@@ -558,10 +570,8 @@ public class McpStatusContribution extends WorkbenchWindowControlContribution
         {
             if (isExecuting)
             {
-                long minutes = executionSeconds / 60;
-                long seconds = executionSeconds % 60;
-                String timeStr = String.format("%02d:%02d        ", minutes, seconds); //$NON-NLS-1$
-                counterLabel.setText(timeStr);
+                counterLabel.setText(activeOperation != null ? buildOperationCounterLabel(activeOperation)
+                        : formatElapsed(executionSeconds) + "        "); //$NON-NLS-1$
             }
             else
             {
@@ -571,7 +581,11 @@ public class McpStatusContribution extends WorkbenchWindowControlContribution
         
         // Update tooltip
         String tooltip;
-        if (isExecuting)
+        if (activeOperation != null)
+        {
+            tooltip = buildOperationTooltip(activeOperation, port, requestCount);
+        }
+        else if (isExecuting)
         {
             tooltip = "MCP Server: Executing " + currentTool +
                 "\nPort: " + port + "\nRequests: " + requestCount + 
@@ -610,6 +624,161 @@ public class McpStatusContribution extends WorkbenchWindowControlContribution
         }
         
         container.layout(true);
+    }
+
+    private String buildLegacyStatusLabel(String currentTool)
+    {
+        if (currentTool == null)
+        {
+            return "MCP"; //$NON-NLS-1$
+        }
+        return "MCP: " + truncate(currentTool, TOOL_NAME_MAX_LENGTH); //$NON-NLS-1$
+    }
+
+    private String buildOperationStatusLabel(OperationProgressState operation)
+    {
+        String toolName = safe(operation.getToolName(), "operation"); //$NON-NLS-1$
+        String stage = humanize(operation.getStage());
+        String label = "MCP: " + toolName; //$NON-NLS-1$
+        if (hasText(stage))
+        {
+            String withStage = label + " - " + stage; //$NON-NLS-1$
+            if (withStage.length() <= STATUS_DETAIL_MAX_LENGTH)
+            {
+                return withStage;
+            }
+        }
+        return truncate(label, STATUS_DETAIL_MAX_LENGTH);
+    }
+
+    private String buildOperationCounterLabel(OperationProgressState operation)
+    {
+        String elapsed = formatElapsed(operation.getElapsedSeconds());
+        if (!operation.isIndeterminate() && operation.getProgress() != null && operation.getTotal() != null
+                && operation.getTotal().doubleValue() > 0)
+        {
+            long percent = Math.round((operation.getProgress().doubleValue() / operation.getTotal().doubleValue())
+                    * 100.0d);
+            percent = Math.max(0, Math.min(100, percent));
+            return percent + "%  " + elapsed; //$NON-NLS-1$
+        }
+
+        String shortStage = truncate(humanize(firstNonBlank(operation.getStage(), operation.getMessage())),
+                COUNTER_STAGE_MAX_LENGTH);
+        if (!hasText(shortStage))
+        {
+            shortStage = "sync"; //$NON-NLS-1$
+        }
+        return shortStage + "  " + elapsed; //$NON-NLS-1$
+    }
+
+    private String buildOperationTooltip(OperationProgressState operation, int port, long requestCount)
+    {
+        StringBuilder tooltip = new StringBuilder();
+        tooltip.append("MCP Server: Executing ").append(safe(operation.getToolName(), "operation")); //$NON-NLS-1$ //$NON-NLS-2$
+        tooltip.append("\nPort: ").append(port); //$NON-NLS-1$
+        tooltip.append("\nRequests: ").append(requestCount); //$NON-NLS-1$
+        tooltip.append("\nStatus: ").append(safe(operation.getStatus(), "UNKNOWN")); //$NON-NLS-1$ //$NON-NLS-2$
+        if (hasText(operation.getStage()))
+        {
+            tooltip.append("\nStage: ").append(humanize(operation.getStage())); //$NON-NLS-1$
+        }
+        if (hasText(operation.getMessage()))
+        {
+            tooltip.append("\nMessage: ").append(operation.getMessage()); //$NON-NLS-1$
+        }
+        if (!operation.isIndeterminate() && operation.getProgress() != null && operation.getTotal() != null)
+        {
+            long percent = Math.round((operation.getProgress().doubleValue() / operation.getTotal().doubleValue())
+                    * 100.0d);
+            percent = Math.max(0, Math.min(100, percent));
+            tooltip.append("\nProgress: ") //$NON-NLS-1$
+                    .append(formatNumber(operation.getProgress())).append("/") //$NON-NLS-1$
+                    .append(formatNumber(operation.getTotal())).append(" (").append(percent).append("%)"); //$NON-NLS-1$ //$NON-NLS-2$
+        }
+        tooltip.append("\nStarted: ").append(TOOLTIP_TIME_FORMATTER.format(operation.getStartedAt())); //$NON-NLS-1$
+        tooltip.append("\nElapsed: ").append(formatElapsed(operation.getElapsedSeconds())); //$NON-NLS-1$
+        tooltip.append("\nVersion: ").append(McpConstants.PLUGIN_VERSION); //$NON-NLS-1$
+        tooltip.append("\nAuthor: ").append(McpConstants.AUTHOR); //$NON-NLS-1$
+
+        appendRecentEvents(tooltip, operation.getRecentEvents());
+        return tooltip.toString();
+    }
+
+    private void appendRecentEvents(StringBuilder tooltip, List<ProgressEvent> recentEvents)
+    {
+        if (recentEvents == null || recentEvents.isEmpty())
+        {
+            return;
+        }
+
+        tooltip.append("\nRecent events:"); //$NON-NLS-1$
+        int startIndex = Math.max(0, recentEvents.size() - TOOLTIP_EVENT_LIMIT);
+        for (int i = startIndex; i < recentEvents.size(); i++)
+        {
+            ProgressEvent event = recentEvents.get(i);
+            tooltip.append("\n- "); //$NON-NLS-1$
+            if (event.getTimestamp() != null)
+            {
+                tooltip.append(TOOLTIP_TIME_FORMATTER.format(event.getTimestamp())).append(" "); //$NON-NLS-1$
+            }
+
+            String eventText = firstNonBlank(event.getMessage(), humanize(event.getStage()));
+            tooltip.append(hasText(eventText) ? eventText : "update"); //$NON-NLS-1$
+        }
+    }
+
+    private String formatElapsed(long elapsedSeconds)
+    {
+        long minutes = elapsedSeconds / 60;
+        long seconds = elapsedSeconds % 60;
+        return String.format("%02d:%02d", minutes, seconds); //$NON-NLS-1$
+    }
+
+    private String formatNumber(Double value)
+    {
+        if (value == null)
+        {
+            return "?"; //$NON-NLS-1$
+        }
+        if (Math.rint(value.doubleValue()) == value.doubleValue())
+        {
+            return Long.toString(Math.round(value.doubleValue()));
+        }
+        return String.format("%.1f", value.doubleValue()); //$NON-NLS-1$
+    }
+
+    private String humanize(String value)
+    {
+        if (!hasText(value))
+        {
+            return null;
+        }
+        return value.replace('_', ' ');
+    }
+
+    private String truncate(String value, int maxLength)
+    {
+        if (!hasText(value) || value.length() <= maxLength)
+        {
+            return value;
+        }
+        return value.substring(0, maxLength - 3) + "..."; //$NON-NLS-1$
+    }
+
+    private String firstNonBlank(String first, String second)
+    {
+        return hasText(first) ? first : second;
+    }
+
+    private String safe(String value, String fallback)
+    {
+        return hasText(value) ? value : fallback;
+    }
+
+    private boolean hasText(String value)
+    {
+        return value != null && !value.isBlank();
     }
 
     @Override

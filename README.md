@@ -17,8 +17,9 @@ MCP (Model Context Protocol) server plugin for 1C:EDT, enabling AI assistants (C
 - 🧩 **BSL Code Analysis** - Browse modules, inspect structure, read/write methods, search code, and analyze call hierarchy
 - 🖼️ **Form Screenshot Capture** - Get PNG screenshots from the form WYSIWYG editor for visual inspection
 - 🚀 **Application Management** - Get applications, update database, launch in debug mode
-- 🎯 **Status Bar** - Real-time server status with tool name, execution time, and interactive controls
+- 🎯 **Status Bar** - Real-time server status with stage-aware progress, elapsed time, and interactive controls
 - ⚡ **Interruptible Operations** - Cancel long-running operations and send signals to AI agent
+- 📡 **Progress Reporting** - `update_database` can publish MCP `notifications/progress` and exposes `get_active_operation` as polling fallback
 - 🏷️ **Metadata Tags** - Organize objects with custom tags, filter Navigator, keyboard shortcuts (Ctrl+Alt+1-0), multiselect support
 - 📁 **Metadata Groups** - Create custom folder hierarchy in Navigator tree per metadata collection
 - ✏️ **Metadata Refactoring** - Rename/delete metadata objects with full cascading updates across BSL code, forms and metadata; add new attributes to existing objects
@@ -90,8 +91,9 @@ The MCP server status bar shows real-time execution status with interactive cont
 <summary><strong>User Signal Controls</strong> - Send signals to AI agent during tool execution</summary>
 
 **During Tool Execution:**
-- Shows tool name (e.g., `MCP: update_database`)
+- Shows tool name and current stage (e.g., `MCP: update_database - waiting for edt`)
 - Shows elapsed time in MM:SS format
+- Shows progress percent only when EDT reports real `progress/total`
 - Click to access control menu
 
 When a tool is executing, you can send signals to the AI agent to interrupt the MCP call:
@@ -127,6 +129,49 @@ Note: The EDT operation may still be running in background.
 - Want to switch agent's focus to a different task
 
 </details>
+
+### Progress Reporting For Long Operations
+
+`update_database` publishes the same runtime progress model to both EDT UI and MCP clients.
+
+- The status bar keeps showing the active EDT operation even after **Continue in Background** interrupted the HTTP call.
+- MCP `notifications/progress` are sent only when the client provided `_meta.progressToken` in the original `tools/call` request and has an SSE stream attached to the same `MCP-Session-Id`.
+- Clients that ignore progress notifications still receive the normal final tool result.
+- `get_active_operation` can be used as a polling fallback when a client does not support or does not consume `notifications/progress`.
+
+Minimal request requirements for progress notifications:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "update_database",
+    "arguments": {
+      "projectName": "MyProject",
+      "applicationId": "app-id"
+    },
+    "_meta": {
+      "progressToken": "update-1"
+    }
+  }
+}
+```
+
+When supported, the server may emit:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "notifications/progress",
+  "params": {
+    "progressToken": "update-1",
+    "progress": 3,
+    "message": "waiting for edt"
+  }
+}
+```
 
 ## Connecting AI Assistants
 
@@ -230,6 +275,7 @@ Add to `claude_desktop_config.json`:
 | `get_objects_by_tags` | Get metadata objects filtered by tags with tag descriptions and object FQNs |
 | `get_applications` | Get list of applications (infobases) for a project with update state |
 | `update_database` | Update database (infobase) with full or incremental update mode |
+| `get_active_operation` | Get the current long-running operation progress snapshot for polling fallback |
 | `debug_launch` | Launch application in debug mode (auto-updates database before launch) |
 | `get_form_screenshot` | Capture PNG screenshot of form WYSIWYG editor (embedded image resource) |
 | `list_modules` | List all BSL modules in a project with module type and parent object |
@@ -494,6 +540,32 @@ Add to `claude_desktop_config.json`:
 | `applicationId` | Yes | Application ID from `get_applications` |
 | `fullUpdate` | No | If true - full reload, if false - incremental update (default: false) |
 | `autoRestructure` | No | Automatically apply restructurization if needed (default: true) |
+
+**Progress behavior:**
+- Tracks stage-aware runtime progress in the EDT status bar
+- Emits MCP `notifications/progress` only when the client supplies `_meta.progressToken`
+- Keeps the final JSON result format unchanged for clients that do not consume progress notifications
+
+Typical stages:
+- `validation`
+- `sync_state_check`
+- `update_start`
+- `waiting_for_edt`
+- `final_state_check`
+- `completion` / `failure`
+
+#### Get Active Operation Tool
+
+**`get_active_operation`** - Return a JSON snapshot of the currently active long-running EDT operation, if any. Useful as a polling fallback for clients that do not use `notifications/progress`.
+
+**Parameters:** none
+
+**Returns:**
+- `active` - whether an operation is currently tracked
+- `toolName`, `status`, `stage`, `message`
+- `progress`, `total`, `indeterminate`
+- `elapsedSeconds`, `startedAt`
+- `recentEvents`
 
 #### Debug Launch Tool
 

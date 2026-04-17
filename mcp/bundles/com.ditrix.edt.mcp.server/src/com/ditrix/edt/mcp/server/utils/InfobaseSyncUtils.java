@@ -23,6 +23,7 @@ import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseSynchroniz
 import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseSynchronizationState;
 import com._1c.g5.v8.dt.platform.services.model.InfobaseReference;
 import com.ditrix.edt.mcp.server.Activator;
+import com.ditrix.edt.mcp.server.progress.OperationProgressReporter;
 import com.e1c.g5.dt.applications.IApplication;
 import com.e1c.g5.dt.applications.infobases.IInfobaseApplication;
 
@@ -59,16 +60,38 @@ public final class InfobaseSyncUtils
      */
     public static IInfobaseUpdateCallback createUpdateCallback(boolean autoConfirmRestructure)
     {
+        return createUpdateCallback(autoConfirmRestructure, null);
+    }
+
+    /**
+     * Creates callback for non-interactive synchronization with optional progress reporting.
+     *
+     * @param autoConfirmRestructure whether database structure changes should be accepted automatically
+     * @param reporter progress reporter for domain-specific synchronization phases
+     * @return synchronization callback
+     */
+    public static IInfobaseUpdateCallback createUpdateCallback(boolean autoConfirmRestructure,
+            OperationProgressReporter reporter)
+    {
         return new IInfobaseUpdateCallback()
         {
             @Override
             public boolean onConfirm(IProject project, InfobaseReference infobase, List<IDbStructureChange> changes,
                     IProgressMonitor monitor)
             {
+                report(reporter, "db_structure_confirmation", //$NON-NLS-1$
+                        "Database structure confirmation requested"); //$NON-NLS-1$
                 if (!autoConfirmRestructure)
                 {
+                    report(reporter, "db_structure_confirmation", //$NON-NLS-1$
+                            "Database structure changes require manual confirmation"); //$NON-NLS-1$
                     Activator.logInfo("Database structure changes require confirmation for project: " //$NON-NLS-1$
                             + project.getName());
+                }
+                else
+                {
+                    report(reporter, "db_structure_confirmation", //$NON-NLS-1$
+                            "Database structure changes auto-confirmed"); //$NON-NLS-1$
                 }
                 return autoConfirmRestructure;
             }
@@ -80,12 +103,26 @@ public final class InfobaseSyncUtils
                     IInfobaseUpdateConflictResolver.IConflictResolveAssist conflictResolveAssist,
                     IProgressMonitor monitor) throws InfobaseSynchronizationException
             {
+                report(reporter, "conflict_override", //$NON-NLS-1$
+                        "Overriding infobase changes with project state"); //$NON-NLS-1$
                 Activator.logInfo("Overriding infobase changes with project state for project: " //$NON-NLS-1$
                         + project.getName());
-                return conflictResolver.overrideConflict(project, infobase, changedObjects, configurationChange,
+                InfobaseConflictResolutionResult result = conflictResolver.overrideConflict(project, infobase,
+                        changedObjects, configurationChange,
                         conflictResolveAssist, monitor);
+                report(reporter, "conflict_override", //$NON-NLS-1$
+                        "Infobase conflict override completed"); //$NON-NLS-1$
+                return result;
             }
         };
+    }
+
+    private static void report(OperationProgressReporter reporter, String stage, String message)
+    {
+        if (reporter != null)
+        {
+            reporter.indeterminate(stage, message);
+        }
     }
 
     /**

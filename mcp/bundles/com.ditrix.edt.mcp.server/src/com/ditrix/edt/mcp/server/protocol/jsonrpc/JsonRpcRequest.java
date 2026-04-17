@@ -88,6 +88,37 @@ public class JsonRpcRequest
         }
         return null;
     }
+
+    /**
+     * Gets the nested "_meta" map from params (for tools/call).
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getMeta()
+    {
+        if (params == null)
+        {
+            return null;
+        }
+        Object meta = params.get("_meta"); //$NON-NLS-1$
+        if (meta instanceof Map)
+        {
+            return (Map<String, Object>) meta;
+        }
+        return null;
+    }
+
+    /**
+     * Gets the progress token from params._meta.progressToken.
+     */
+    public Object getProgressToken()
+    {
+        Map<String, Object> meta = getMeta();
+        if (meta == null)
+        {
+            return null;
+        }
+        return meta.get("progressToken"); //$NON-NLS-1$
+    }
     
     /**
      * Gets the tool name from params.name (for tools/call).

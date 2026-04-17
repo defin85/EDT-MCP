@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -22,6 +23,12 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.ditrix.edt.mcp.server.protocol.McpConstants;
 import com.ditrix.edt.mcp.server.protocol.McpProtocolHandler;
+import com.ditrix.edt.mcp.server.progress.OperationProgressReporter;
+import com.ditrix.edt.mcp.server.progress.OperationProgressState;
+import com.ditrix.edt.mcp.server.progress.ProgressNotificationSender;
+import com.ditrix.edt.mcp.server.progress.ProgressEvent;
+import com.ditrix.edt.mcp.server.progress.SseSessionRegistry;
+import com.ditrix.edt.mcp.server.progress.ToolExecutionContext;
 import com.ditrix.edt.mcp.server.tools.McpToolRegistry;
 import com.ditrix.edt.mcp.server.tools.impl.GetBookmarksTool;
 import com.ditrix.edt.mcp.server.tools.impl.DebugLaunchTool;
@@ -32,6 +39,7 @@ import com.ditrix.edt.mcp.server.tools.impl.GetConfigurationPropertiesTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetContentAssistTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetEdtVersionTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetFormScreenshotTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetActiveOperationTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetMetadataDetailsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetSymbolInfoTool;
 import com.ditrix.edt.mcp.server.tools.impl.GoToDefinitionTool;
@@ -85,6 +93,16 @@ public class McpServer
     
     /** Currently active tool call that can be interrupted */
     private volatile ActiveToolCall activeToolCall = null;
+
+    /** Active long-running operation progress reporter */
+    private volatile OperationProgressReporter activeOperationReporter = null;
+
+    /** Session-aware registry for server-originated SSE notifications */
+    private final SseSessionRegistry sseSessionRegistry = new SseSessionRegistry();
+
+    /** Sender for MCP notifications/progress */
+    private final ProgressNotificationSender progressNotificationSender = new ProgressNotificationSender(
+            sseSessionRegistry);
     
     /** Protocol handler */
     private McpProtocolHandler protocolHandler;
@@ -198,6 +216,7 @@ public class McpServer
         // Application tools
         registry.register(new GetApplicationsTool());
         registry.register(new UpdateDatabaseTool());
+        registry.register(new GetActiveOperationTool());
         registry.register(new DebugLaunchTool());
 
         // BSL code analysis tools
@@ -241,6 +260,7 @@ public class McpServer
                 sseExecutor.shutdownNow();
                 sseExecutor = null;
             }
+            sseSessionRegistry.clear();
             Activator.logInfo("MCP Server stopped"); //$NON-NLS-1$
         }
     }
@@ -394,6 +414,64 @@ public class McpServer
     }
 
     /**
+     * Registers active operation progress reporter.
+     *
+     * @param reporter reporter for the currently active long-running operation
+     */
+    public synchronized void setActiveOperation(OperationProgressReporter reporter)
+    {
+        if (this.activeOperationReporter != null && this.activeOperationReporter != reporter)
+        {
+            this.activeOperationReporter.setStateListener(null);
+        }
+        reporter.setStateListener(this::handleActiveOperationUpdate);
+        this.activeOperationReporter = Objects.requireNonNull(reporter);
+        handleActiveOperationUpdate(reporter.snapshot());
+    }
+
+    /**
+     * Returns a snapshot of active operation progress.
+     *
+     * @return active operation snapshot or null if no tracked operation exists
+     */
+    public OperationProgressState getActiveOperationSnapshot()
+    {
+        OperationProgressReporter reporter = activeOperationReporter;
+        return reporter != null ? reporter.snapshot() : null;
+    }
+
+    /**
+     * Clears the active operation progress reporter.
+     */
+    public synchronized void clearActiveOperation()
+    {
+        if (this.activeOperationReporter != null)
+        {
+            this.activeOperationReporter.setStateListener(null);
+        }
+        this.activeOperationReporter = null;
+    }
+
+    /**
+     * Appends an external progress event to the active operation history.
+     *
+     * @param event progress event to append
+     */
+    public void appendActiveOperationEvent(ProgressEvent event)
+    {
+        OperationProgressReporter reporter = activeOperationReporter;
+        if (reporter != null)
+        {
+            reporter.appendEvent(event);
+        }
+    }
+
+    private void handleActiveOperationUpdate(OperationProgressState state)
+    {
+        progressNotificationSender.onOperationUpdated(state);
+    }
+
+    /**
      * Interrupts the current tool call with a user signal.
      * Sends the signal response immediately and returns control to the agent.
      * This method is thread-safe.
@@ -483,7 +561,8 @@ public class McpServer
                 }
                 else if ("DELETE".equals(method)) //$NON-NLS-1$
                 {
-                    // Session termination - accept but we don't track sessions currently
+                    String sessionId = exchange.getRequestHeaders().getFirst(McpConstants.HEADER_SESSION_ID);
+                    sseSessionRegistry.removeSession(sessionId);
                     sendResponse(exchange, 200, ""); //$NON-NLS-1$
                 }
                 else
@@ -638,13 +717,22 @@ public class McpServer
             String response;
             boolean isInitialize = requestBody.contains("\"" + McpConstants.METHOD_INITIALIZE + "\""); //$NON-NLS-1$ //$NON-NLS-2$
             boolean isToolCall = requestBody.contains("\"" + McpConstants.METHOD_TOOLS_CALL + "\""); //$NON-NLS-1$ //$NON-NLS-2$
+            String acceptHeader = exchange.getRequestHeaders().getFirst("Accept"); //$NON-NLS-1$
+            boolean acceptsSse = acceptHeader != null && acceptHeader.contains("text/event-stream"); //$NON-NLS-1$
+            String sessionId = exchange.getRequestHeaders().getFirst(McpConstants.HEADER_SESSION_ID);
+            if (isInitialize && !hasText(sessionId))
+            {
+                sessionId = generateSessionId();
+            }
+            String transportMode = acceptsSse ? ToolExecutionContext.TRANSPORT_MODE_SSE
+                    : ToolExecutionContext.TRANSPORT_MODE_JSON;
 
             try
             {
                 if (isToolCall)
                 {
                     // Handle tool calls with interruptible execution
-                    response = handleInterruptibleToolCall(exchange, requestBody);
+                    response = handleInterruptibleToolCall(exchange, requestBody, sessionId, acceptsSse, transportMode);
                     if (response == null)
                     {
                         // Response was already sent (user interrupted)
@@ -653,7 +741,7 @@ public class McpServer
                 }
                 else
                 {
-                    response = protocolHandler.processRequest(requestBody);
+                    response = protocolHandler.processRequest(requestBody, sessionId, acceptsSse, transportMode);
                 }
 
                 // null response means notification (no response needed)
@@ -673,21 +761,17 @@ public class McpServer
                     McpConstants.ERROR_INTERNAL, e.getMessage(), null);
             }
 
-            // Check if client accepts SSE
-            String acceptHeader = exchange.getRequestHeaders().getFirst("Accept"); //$NON-NLS-1$
-            boolean acceptsSse = acceptHeader != null && acceptHeader.contains("text/event-stream"); //$NON-NLS-1$
-
             if (acceptsSse)
             {
                 // Send response as SSE event
-                sendSseResponse(exchange, response, isInitialize);
+                sendSseResponse(exchange, response, sessionId, isInitialize);
             }
             else
             {
                 // Send as plain JSON - add session header for initialize
-                if (isInitialize)
+                if (isInitialize && hasText(sessionId))
                 {
-                    exchange.getResponseHeaders().add(McpConstants.HEADER_SESSION_ID, generateSessionId());
+                    exchange.getResponseHeaders().add(McpConstants.HEADER_SESSION_ID, sessionId);
                 }
                 exchange.getResponseHeaders().add("Content-Type", "application/json"); //$NON-NLS-1$ //$NON-NLS-2$
                 exchange.getResponseHeaders().add("Connection", "keep-alive"); //$NON-NLS-1$ //$NON-NLS-2$
@@ -703,7 +787,8 @@ public class McpServer
          * @param requestBody the request body
          * @return the response, or null if response was already sent (interrupted)
          */
-        private String handleInterruptibleToolCall(HttpExchange exchange, String requestBody) throws Exception
+        private String handleInterruptibleToolCall(HttpExchange exchange, String requestBody, String sessionId,
+                boolean acceptsSse, String transportMode) throws Exception
         {
             // Extract request ID and tool name for ActiveToolCall
             Object requestId = extractRequestId(requestBody);
@@ -722,7 +807,8 @@ public class McpServer
             Thread executionThread = new Thread(() -> {
                 try
                 {
-                    resultContainer[0] = protocolHandler.processRequest(requestBody);
+                    resultContainer[0] = protocolHandler.processRequest(requestBody, sessionId, acceptsSse,
+                            transportMode);
                 }
                 catch (Exception e)
                 {
@@ -860,16 +946,17 @@ public class McpServer
          * Sends response as SSE event stream.
          * As per MCP 2025-11-25: should include event ID for reconnection.
          */
-        private void sendSseResponse(HttpExchange exchange, String response, boolean isInitialize) throws IOException
+        private void sendSseResponse(HttpExchange exchange, String response, String sessionId, boolean isInitialize)
+                throws IOException
         {
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream"); //$NON-NLS-1$ //$NON-NLS-2$
             exchange.getResponseHeaders().add("Cache-Control", "no-cache"); //$NON-NLS-1$ //$NON-NLS-2$
             exchange.getResponseHeaders().add("Connection", "keep-alive"); //$NON-NLS-1$ //$NON-NLS-2$
             
             // Add session ID for initialize response
-            if (isInitialize)
+            if (isInitialize && hasText(sessionId))
             {
-                exchange.getResponseHeaders().add(McpConstants.HEADER_SESSION_ID, generateSessionId());
+                exchange.getResponseHeaders().add(McpConstants.HEADER_SESSION_ID, sessionId);
             }
             
             // Build SSE message with event ID (per 2025-11-25 spec)
@@ -902,22 +989,35 @@ public class McpServer
             if (acceptHeader != null && acceptHeader.contains("text/event-stream")) //$NON-NLS-1$
             {
                 Activator.logInfo("SSE GET request received - opening SSE stream"); //$NON-NLS-1$
+                String sessionId = exchange.getRequestHeaders().getFirst(McpConstants.HEADER_SESSION_ID);
                 
                 exchange.getResponseHeaders().add("Content-Type", "text/event-stream"); //$NON-NLS-1$ //$NON-NLS-2$
                 exchange.getResponseHeaders().add("Cache-Control", "no-cache"); //$NON-NLS-1$ //$NON-NLS-2$
                 exchange.getResponseHeaders().add("Connection", "keep-alive"); //$NON-NLS-1$ //$NON-NLS-2$
+                if (hasText(sessionId))
+                {
+                    exchange.getResponseHeaders().add(McpConstants.HEADER_SESSION_ID, sessionId);
+                }
                 exchange.sendResponseHeaders(200, 0);
                 
                 // Keep SSE stream open with periodic heartbeat comments
                 try (java.io.OutputStream os = exchange.getResponseBody())
                 {
+                    SseSessionRegistry.SessionStream stream = hasText(sessionId)
+                            ? sseSessionRegistry.registerSession(sessionId, os)
+                            : sseSessionRegistry.createDetachedStream(os);
+                    if (!hasText(sessionId))
+                    {
+                        Activator.logInfo("SSE stream opened without session id; progress notifications disabled"); //$NON-NLS-1$
+                    }
                     while (!Thread.currentThread().isInterrupted())
                     {
                         try
                         {
-                            byte[] heartbeat = ": keep-alive\n\n".getBytes(StandardCharsets.UTF_8); //$NON-NLS-1$
-                            os.write(heartbeat);
-                            os.flush();
+                            if (!stream.writeComment("keep-alive")) //$NON-NLS-1$
+                            {
+                                break;
+                            }
                             Thread.sleep(5000);
                         }
                         catch (InterruptedException e)
@@ -925,11 +1025,14 @@ public class McpServer
                             Thread.currentThread().interrupt();
                             break;
                         }
-                        catch (IOException e)
-                        {
-                            // Client disconnected
-                            break;
-                        }
+                    }
+                    if (hasText(sessionId))
+                    {
+                        sseSessionRegistry.unregisterSession(sessionId, stream);
+                    }
+                    else
+                    {
+                        stream.markClosed();
                     }
                 }
                 catch (IOException e)
@@ -970,6 +1073,11 @@ public class McpServer
                origin.startsWith("vscode-webview://"); //$NON-NLS-1$
     }
 
+    private static boolean hasText(String value)
+    {
+        return value != null && !value.isBlank();
+    }
+
     /**
      * Adds CORS headers to the HTTP exchange if Origin is present.
      * Validates the origin and returns false if it's not allowed.
@@ -988,7 +1096,8 @@ public class McpServer
             }
             exchange.getResponseHeaders().add("Access-Control-Allow-Origin", origin); //$NON-NLS-1$
             exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS"); //$NON-NLS-1$ //$NON-NLS-2$
-            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type, Accept"); //$NON-NLS-1$ //$NON-NLS-2$
+            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", //$NON-NLS-1$
+                "Content-Type, Accept, MCP-Session-Id, MCP-Protocol-Version"); //$NON-NLS-1$
         }
         return true;
     }
