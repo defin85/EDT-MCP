@@ -58,6 +58,9 @@ python tests/e2e/run_e2e_tests.py --junit-xml results.xml
 | BSL Code | list_modules, get_module_structure, read_module_source, read_method_source, search_in_code |
 | Advanced | find_references, get_applications, get_form_screenshot |
 
+Task-backed `update_database`, `notifications/progress`, and compatibility polling through `get_active_operation`
+are currently documented and manually verifiable, but do not yet have a dedicated checked-in automated suite.
+
 ## Test Configuration
 
 The `TestConfiguration/` directory contains a minimal 1C:Enterprise configuration for testing:

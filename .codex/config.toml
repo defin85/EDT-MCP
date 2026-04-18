@@ -1,0 +1,8 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+personality = "pragmatic"
+project_root_markers = ["AGENTS.md", "mcp/pom.xml"]
+project_doc_max_bytes = 131072
+
+[tools]
+view_image = true

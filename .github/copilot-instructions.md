@@ -1,30 +1,23 @@
-## CRITICAL: Always Consult the Expert
+## Copilot Surface Notes
 
-**Before making any significant changes, ALWAYS use expert consultation tools:**
+Root repository policy lives in `AGENTS.md`. Use this file only for Copilot-specific additions.
 
-Tool	When Copilot Uses It
-🧠 Ask Expert	- Clarifications, stuck after 2 attempts, architectural decisions
-🎯 Select Options	- Present 2-5 choices for decisions
-📝 Review Code	- Security-sensitive or complex implementations
-⚠️ Confirm Action	- Before deletions, schema changes, breaking changes
-🖼️ Read Image	- Analyze mockups, diagrams, icons in your project
-📊 Check Task Status	- Get messages from expert, respect pause, check if consultation needed
-📋 Questionnaire	- Multi-field forms for structured data collection
+### Use Repo Policy First
 
-**When to consult:**
-- Uncertain about BSL typing or 1C platform specifics
-- Before modifying existing business logic
-- When error messages are unclear
-- Before any database schema changes
-- When implementing new tools or integrations
+- Follow `AGENTS.md`, `docs/agent/*`, and `openspec/*` as the repository source of truth.
+- Use `rg` for code search.
+- All code and UI strings must remain in English.
 
-In the examples folder, there are examples of creating a plugin.
-Instructions are available here: https://edt.1c.ru/dev/ru/docs/plugins/project/
-We are developing a plugin for EDT, this is the MCP server.
-Documentation is here: https://edt.1c.ru/dev/edt/2025.2/apidocs/
+### When Expert Tools Are Helpful
 
-DO NOT BUILD YOURSELF, ASK THE EXPERT!
+If Copilot-specific expert/consultation tools are available in your surface, prefer them for:
 
-ALL CODE AND INTERFACE MUST BE IN ENGLISH.
+- ambiguous 1C:EDT / platform-specific behaviour
+- deletions, schema-level changes, or breaking protocol changes
+- complex runtime/UI interactions inside EDT
+- cases where local verification is blocked by missing EDT runtime context
 
-USE rg TO SEARCH THE CODEBASE.
+### Useful References
+
+- EDT plugin project docs: https://edt.1c.ru/dev/ru/docs/plugins/project/
+- EDT 2025.2 API docs: https://edt.1c.ru/dev/edt/2025.2/apidocs/
