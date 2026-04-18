@@ -17,6 +17,7 @@ public final class OperationProgressState
     public static final String STATUS_RUNNING = "RUNNING"; //$NON-NLS-1$
     public static final String STATUS_COMPLETED = "COMPLETED"; //$NON-NLS-1$
     public static final String STATUS_FAILED = "FAILED"; //$NON-NLS-1$
+    public static final String STATUS_CANCELLED = "CANCELLED"; //$NON-NLS-1$
 
     private final String operationId;
     private final String toolName;

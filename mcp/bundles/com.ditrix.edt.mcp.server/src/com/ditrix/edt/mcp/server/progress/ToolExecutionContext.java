@@ -6,6 +6,8 @@
 
 package com.ditrix.edt.mcp.server.progress;
 
+import com.ditrix.edt.mcp.server.tasks.TaskCancellationToken;
+
 /**
  * Immutable request-scoped runtime context for the currently executing tool.
  */
@@ -21,9 +23,10 @@ public final class ToolExecutionContext
     private final boolean acceptsSse;
     private final String transportMode;
     private final String operationId;
+    private final TaskCancellationToken cancellationToken;
 
     public ToolExecutionContext(String requestId, String toolName, String sessionId, Object progressToken,
-            boolean acceptsSse, String transportMode, String operationId)
+            boolean acceptsSse, String transportMode, String operationId, TaskCancellationToken cancellationToken)
     {
         this.requestId = requestId;
         this.toolName = toolName;
@@ -32,6 +35,7 @@ public final class ToolExecutionContext
         this.acceptsSse = acceptsSse;
         this.transportMode = transportMode;
         this.operationId = operationId;
+        this.cancellationToken = cancellationToken;
     }
 
     public String getRequestId()
@@ -67,5 +71,10 @@ public final class ToolExecutionContext
     public String getOperationId()
     {
         return operationId;
+    }
+
+    public TaskCancellationToken getCancellationToken()
+    {
+        return cancellationToken;
     }
 }

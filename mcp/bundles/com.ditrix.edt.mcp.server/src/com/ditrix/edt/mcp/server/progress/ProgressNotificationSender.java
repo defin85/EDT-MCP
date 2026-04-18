@@ -140,7 +140,8 @@ public class ProgressNotificationSender
     private boolean isTerminal(OperationProgressState state)
     {
         return OperationProgressState.STATUS_COMPLETED.equals(state.getStatus())
-                || OperationProgressState.STATUS_FAILED.equals(state.getStatus());
+                || OperationProgressState.STATUS_FAILED.equals(state.getStatus())
+                || OperationProgressState.STATUS_CANCELLED.equals(state.getStatus());
     }
 
     private boolean hasText(String value)

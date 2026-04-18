@@ -16,9 +16,9 @@ public class ToolsListResult
 {
     private List<ToolInfo> tools = new ArrayList<>();
     
-    public void addTool(String name, String description, Object inputSchema)
+    public void addTool(String name, String description, Object inputSchema, String taskSupport)
     {
-        tools.add(new ToolInfo(name, description, inputSchema));
+        tools.add(new ToolInfo(name, description, inputSchema, taskSupport));
     }
     
     public List<ToolInfo> getTools()
@@ -34,12 +34,14 @@ public class ToolsListResult
         private String name;
         private String description;
         private Object inputSchema;
+        private Execution execution;
         
-        public ToolInfo(String name, String description, Object inputSchema)
+        public ToolInfo(String name, String description, Object inputSchema, String taskSupport)
         {
             this.name = name;
             this.description = description;
             this.inputSchema = inputSchema;
+            this.execution = new Execution(taskSupport);
         }
         
         public String getName()
@@ -55,6 +57,26 @@ public class ToolsListResult
         public Object getInputSchema()
         {
             return inputSchema;
+        }
+
+        public Execution getExecution()
+        {
+            return execution;
+        }
+    }
+
+    public static class Execution
+    {
+        private String taskSupport;
+
+        public Execution(String taskSupport)
+        {
+            this.taskSupport = taskSupport;
+        }
+
+        public String getTaskSupport()
+        {
+            return taskSupport;
         }
     }
 }

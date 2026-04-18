@@ -119,12 +119,96 @@ public class JsonRpcRequest
         }
         return meta.get("progressToken"); //$NON-NLS-1$
     }
-    
+
+    /**
+     * Gets the nested "task" map from params.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getTask()
+    {
+        if (params == null)
+        {
+            return null;
+        }
+        Object task = params.get("task"); //$NON-NLS-1$
+        if (task instanceof Map)
+        {
+            return (Map<String, Object>) task;
+        }
+        return null;
+    }
+
+    public boolean hasTask()
+    {
+        return getTask() != null;
+    }
+
+    public Long getTaskTtl()
+    {
+        Map<String, Object> task = getTask();
+        if (task == null)
+        {
+            return null;
+        }
+        Object ttl = task.get("ttl"); //$NON-NLS-1$
+        if (ttl instanceof Number)
+        {
+            return Long.valueOf(((Number) ttl).longValue());
+        }
+        if (ttl != null)
+        {
+            try
+            {
+                return Long.valueOf(Long.parseLong(ttl.toString()));
+            }
+            catch (NumberFormatException e)
+            {
+                return null;
+            }
+        }
+        return null;
+    }
+
     /**
      * Gets the tool name from params.name (for tools/call).
      */
     public String getToolName()
     {
         return getStringParam("name"); //$NON-NLS-1$
+    }
+
+    public String getTaskId()
+    {
+        return getStringParam("taskId"); //$NON-NLS-1$
+    }
+
+    public String getCursor()
+    {
+        return getStringParam("cursor"); //$NON-NLS-1$
+    }
+
+    public Integer getLimit()
+    {
+        if (params == null)
+        {
+            return null;
+        }
+        Object value = params.get("limit"); //$NON-NLS-1$
+        if (value instanceof Number)
+        {
+            return Integer.valueOf(((Number) value).intValue());
+        }
+        if (value != null)
+        {
+            try
+            {
+                return Integer.valueOf(Integer.parseInt(value.toString()));
+            }
+            catch (NumberFormatException e)
+            {
+                return null;
+            }
+        }
+        return null;
     }
 }

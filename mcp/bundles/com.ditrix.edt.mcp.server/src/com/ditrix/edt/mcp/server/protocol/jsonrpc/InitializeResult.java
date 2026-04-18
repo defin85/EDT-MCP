@@ -43,10 +43,16 @@ public class InitializeResult
     public static class Capabilities
     {
         private Tools tools = new Tools();
+        private Tasks tasks = new Tasks();
         
         public Tools getTools()
         {
             return tools;
+        }
+
+        public Tasks getTasks()
+        {
+            return tasks;
         }
     }
     
@@ -56,6 +62,56 @@ public class InitializeResult
     public static class Tools
     {
         // Empty - just signals that tools are supported
+    }
+
+    /**
+     * Tasks capability tree.
+     */
+    public static class Tasks
+    {
+        private CapabilityFlag list = new CapabilityFlag();
+        private CapabilityFlag cancel = new CapabilityFlag();
+        private Requests requests = new Requests();
+
+        public CapabilityFlag getList()
+        {
+            return list;
+        }
+
+        public CapabilityFlag getCancel()
+        {
+            return cancel;
+        }
+
+        public Requests getRequests()
+        {
+            return requests;
+        }
+    }
+
+    public static class Requests
+    {
+        private ToolRequests tools = new ToolRequests();
+
+        public ToolRequests getTools()
+        {
+            return tools;
+        }
+    }
+
+    public static class ToolRequests
+    {
+        private CapabilityFlag call = new CapabilityFlag();
+
+        public CapabilityFlag getCall()
+        {
+            return call;
+        }
+    }
+
+    public static class CapabilityFlag
+    {
+        // Empty object signals support
     }
     
     /**

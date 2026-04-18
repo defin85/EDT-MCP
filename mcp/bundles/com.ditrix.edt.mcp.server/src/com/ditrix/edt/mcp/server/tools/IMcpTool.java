@@ -15,6 +15,28 @@ import java.util.Map;
 public interface IMcpTool
 {
     /**
+     * Tool-level support for task-augmented execution.
+     */
+    enum TaskSupport
+    {
+        FORBIDDEN("forbidden"), //$NON-NLS-1$
+        OPTIONAL("optional"), //$NON-NLS-1$
+        REQUIRED("required"); //$NON-NLS-1$
+
+        private final String wireValue;
+
+        TaskSupport(String wireValue)
+        {
+            this.wireValue = wireValue;
+        }
+
+        public String getWireValue()
+        {
+            return wireValue;
+        }
+    }
+
+    /**
      * Response content type for tool results.
      */
     enum ResponseType
@@ -70,6 +92,14 @@ public interface IMcpTool
     default ResponseType getResponseType()
     {
         return ResponseType.MARKDOWN;
+    }
+
+    /**
+     * Returns the task-augmentation support level for this tool.
+     */
+    default TaskSupport getTaskSupport()
+    {
+        return TaskSupport.FORBIDDEN;
     }
     
     /**

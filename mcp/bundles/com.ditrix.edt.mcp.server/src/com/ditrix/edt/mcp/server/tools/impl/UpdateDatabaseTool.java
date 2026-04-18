@@ -27,6 +27,7 @@ import com.ditrix.edt.mcp.server.progress.CapturingProgressMonitor;
 import com.ditrix.edt.mcp.server.progress.OperationProgressReporter;
 import com.ditrix.edt.mcp.server.progress.ToolExecutionContext;
 import com.ditrix.edt.mcp.server.progress.ToolExecutionContextHolder;
+import com.ditrix.edt.mcp.server.tasks.TaskCancellationToken;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
@@ -80,6 +81,12 @@ public class UpdateDatabaseTool implements IMcpTool
     {
         return ResponseType.JSON;
     }
+
+    @Override
+    public TaskSupport getTaskSupport()
+    {
+        return TaskSupport.OPTIONAL;
+    }
     
     @Override
     public String execute(Map<String, String> params)
@@ -126,6 +133,11 @@ public class UpdateDatabaseTool implements IMcpTool
         ToolExecutionContext context = ToolExecutionContextHolder.get();
         OperationProgressReporter reporter = createProgressReporter(context, fullUpdate, autoRestructure);
         CapturingProgressMonitor monitor = new CapturingProgressMonitor(reporter);
+        TaskCancellationToken cancellationToken = context != null ? context.getCancellationToken() : null;
+        if (isCancellationRequested(cancellationToken, monitor))
+        {
+            return cancelled(reporter);
+        }
         registerActiveOperation(server, reporter);
 
         try
@@ -142,6 +154,10 @@ public class UpdateDatabaseTool implements IMcpTool
             if (!project.isOpen())
             {
                 return fail(reporter, "Project is closed: " + projectName); //$NON-NLS-1$
+            }
+            if (isCancellationRequested(cancellationToken, monitor))
+            {
+                return cancelled(reporter);
             }
             
             // Get application manager
@@ -173,6 +189,10 @@ public class UpdateDatabaseTool implements IMcpTool
             {
                 return fail(reporter, "Application is not an infobase application: " + applicationId); //$NON-NLS-1$
             }
+            if (isCancellationRequested(cancellationToken, monitor))
+            {
+                return cancelled(reporter);
+            }
 
             reporter.stage(STAGE_SYNC_STATE_CHECK, "Checking synchronization state before update"); //$NON-NLS-1$
             InfobaseSynchronizationState synchronizationStateBefore = synchronizationManager
@@ -203,6 +223,10 @@ public class UpdateDatabaseTool implements IMcpTool
                     : synchronizationManager.updateInfobase(project, infobaseApplication.getInfobase(),
                             InfobaseSyncUtils.createUpdateCallback(autoRestructure, reporter), true,
                             monitor);
+            if (isCancellationRequested(cancellationToken, monitor))
+            {
+                return cancelled(reporter);
+            }
 
             reporter.stage(STAGE_FINAL_STATE, "Reading final synchronization state"); //$NON-NLS-1$
             InfobaseSynchronizationState synchronizationStateAfter = synchronizationManager
@@ -294,6 +318,11 @@ public class UpdateDatabaseTool implements IMcpTool
     {
         if (server != null)
         {
+            ToolExecutionContext context = ToolExecutionContextHolder.get();
+            if (context != null && context.getOperationId() != null)
+            {
+                reporter.appendStateListener(state -> server.getTaskRegistry().updateProgress(context.getOperationId(), state));
+            }
             server.setActiveOperation(reporter);
         }
     }
@@ -310,6 +339,24 @@ public class UpdateDatabaseTool implements IMcpTool
     {
         reporter.stage(STAGE_FAILURE, message);
         reporter.failed(message, null);
+        return ToolResult.error(message).toJson();
+    }
+
+    private boolean isCancellationRequested(TaskCancellationToken cancellationToken, CapturingProgressMonitor monitor)
+    {
+        boolean cancelled = cancellationToken != null && cancellationToken.isCancellationRequested();
+        if (cancelled)
+        {
+            monitor.setCanceled(true);
+        }
+        return cancelled || monitor.isCanceled() || Thread.currentThread().isInterrupted();
+    }
+
+    private String cancelled(OperationProgressReporter reporter)
+    {
+        String message = "Database update cancelled"; //$NON-NLS-1$
+        reporter.stage(STAGE_FAILURE, message);
+        reporter.cancelled(message);
         return ToolResult.error(message).toJson();
     }
 }

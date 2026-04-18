@@ -127,6 +127,15 @@ public class OperationProgressReporter
         return publishSnapshot(snapshot());
     }
 
+    public synchronized OperationProgressState cancelled(String message)
+    {
+        this.message = hasText(message) ? message : "Operation cancelled"; //$NON-NLS-1$
+        this.status = OperationProgressState.STATUS_CANCELLED;
+        this.lastUpdateAt = Instant.now();
+        addEvent(lastUpdateAt, stage, this.message, progress, total);
+        return publishSnapshot(snapshot());
+    }
+
     public synchronized void appendEvent(ProgressEvent event)
     {
         if (event == null)
@@ -141,6 +150,26 @@ public class OperationProgressReporter
     public void setStateListener(Consumer<OperationProgressState> stateListener)
     {
         this.stateListener = stateListener;
+    }
+
+    public synchronized void appendStateListener(Consumer<OperationProgressState> additionalListener)
+    {
+        if (additionalListener == null)
+        {
+            return;
+        }
+        Consumer<OperationProgressState> current = this.stateListener;
+        if (current == null)
+        {
+            this.stateListener = additionalListener;
+        }
+        else
+        {
+            this.stateListener = state -> {
+                current.accept(state);
+                additionalListener.accept(state);
+            };
+        }
     }
 
     public synchronized OperationProgressState snapshot()

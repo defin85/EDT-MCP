@@ -1,0 +1,19 @@
+# Repo-specific context ignore patterns.
+# Keep repo-owned instructions, OpenSpec, README, tests docs, and source in context.
+# Exclude local state, exploratory notes, editor noise, and build/cache artifacts.
+
+.git/**
+.beads/**
+.claude/**
+.vscode/**
+
+**/target/**
+**/bin/**
+**/__pycache__/**
+**/.pytest_cache/**
+**/surefire-reports/**
+
+tests/e2e/*.xml
+log.log
+nul
+nulq

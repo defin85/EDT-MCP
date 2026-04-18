@@ -73,12 +73,33 @@ public final class McpConstants
 
     /** Progress notification */
     public static final String METHOD_NOTIFICATION_PROGRESS = "notifications/progress"; //$NON-NLS-1$
+
+    /** Task status notification */
+    public static final String METHOD_NOTIFICATION_TASKS_STATUS = "notifications/tasks/status"; //$NON-NLS-1$
     
     /** Tools list method */
     public static final String METHOD_TOOLS_LIST = "tools/list"; //$NON-NLS-1$
     
     /** Tools call method */
     public static final String METHOD_TOOLS_CALL = "tools/call"; //$NON-NLS-1$
+
+    /** Tasks get method */
+    public static final String METHOD_TASKS_GET = "tasks/get"; //$NON-NLS-1$
+
+    /** Tasks list method */
+    public static final String METHOD_TASKS_LIST = "tasks/list"; //$NON-NLS-1$
+
+    /** Tasks result method */
+    public static final String METHOD_TASKS_RESULT = "tasks/result"; //$NON-NLS-1$
+
+    /** Tasks cancel method */
+    public static final String METHOD_TASKS_CANCEL = "tasks/cancel"; //$NON-NLS-1$
+
+    /** Related task metadata key */
+    public static final String META_RELATED_TASK = "io.modelcontextprotocol/related-task"; //$NON-NLS-1$
+
+    /** Immediate-response metadata key for models */
+    public static final String META_MODEL_IMMEDIATE_RESPONSE = "io.modelcontextprotocol/model-immediate-response"; //$NON-NLS-1$
     
     private McpConstants()
     {

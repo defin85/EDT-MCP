@@ -14,6 +14,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.SynchronousQueue;
@@ -29,6 +30,7 @@ import com.ditrix.edt.mcp.server.progress.ProgressNotificationSender;
 import com.ditrix.edt.mcp.server.progress.ProgressEvent;
 import com.ditrix.edt.mcp.server.progress.SseSessionRegistry;
 import com.ditrix.edt.mcp.server.progress.ToolExecutionContext;
+import com.ditrix.edt.mcp.server.tasks.TaskRegistry;
 import com.ditrix.edt.mcp.server.tools.McpToolRegistry;
 import com.ditrix.edt.mcp.server.tools.impl.GetBookmarksTool;
 import com.ditrix.edt.mcp.server.tools.impl.DebugLaunchTool;
@@ -113,6 +115,12 @@ public class McpServer
     /** Dedicated thread pool for long-lived SSE connections (isolated from main request pool) */
     private ExecutorService sseExecutor;
 
+    /** Dedicated executor for task-backed tool execution */
+    private ThreadPoolExecutor taskExecutor;
+
+    /** Registry of task-backed work */
+    private final TaskRegistry taskRegistry = new TaskRegistry();
+
     /**
      * Starts the MCP server on the specified port.
      * 
@@ -173,6 +181,14 @@ public class McpServer
             new SynchronousQueue<>(),
             r -> {
                 Thread t = new Thread(r, "MCP-SSE-" + System.currentTimeMillis()); //$NON-NLS-1$
+                t.setDaemon(true);
+                return t;
+            });
+        taskExecutor = new ThreadPoolExecutor(
+            0, 4, 60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(100),
+            r -> {
+                Thread t = new Thread(r, "MCP-Task-" + System.currentTimeMillis()); //$NON-NLS-1$
                 t.setDaemon(true);
                 return t;
             });
@@ -260,6 +276,12 @@ public class McpServer
                 sseExecutor.shutdownNow();
                 sseExecutor = null;
             }
+            if (taskExecutor != null)
+            {
+                taskExecutor.shutdownNow();
+                taskExecutor = null;
+            }
+            taskRegistry.clear();
             sseSessionRegistry.clear();
             Activator.logInfo("MCP Server stopped"); //$NON-NLS-1$
         }
@@ -424,7 +446,7 @@ public class McpServer
         {
             this.activeOperationReporter.setStateListener(null);
         }
-        reporter.setStateListener(this::handleActiveOperationUpdate);
+        reporter.appendStateListener(this::handleActiveOperationUpdate);
         this.activeOperationReporter = Objects.requireNonNull(reporter);
         handleActiveOperationUpdate(reporter.snapshot());
     }
@@ -469,6 +491,20 @@ public class McpServer
     private void handleActiveOperationUpdate(OperationProgressState state)
     {
         progressNotificationSender.onOperationUpdated(state);
+    }
+
+    public TaskRegistry getTaskRegistry()
+    {
+        return taskRegistry;
+    }
+
+    public Future<?> submitTask(Runnable runnable)
+    {
+        if (taskExecutor == null)
+        {
+            throw new RejectedExecutionException("Task executor is not available"); //$NON-NLS-1$
+        }
+        return taskExecutor.submit(runnable);
     }
 
     /**

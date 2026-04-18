@@ -173,6 +173,42 @@ When supported, the server may emit:
 }
 ```
 
+### Experimental MCP Tasks Support
+
+The server now exposes experimental MCP Tasks support for long-running tool execution.
+
+- `initialize` advertises `capabilities.tasks.list`, `capabilities.tasks.cancel`, and `capabilities.tasks.requests.tools.call`
+- `tools/list` exposes `execution.taskSupport` for every tool
+- `update_database` currently supports `execution.taskSupport: "optional"`
+- `tasks/get`, `tasks/list`, `tasks/result`, and `tasks/cancel` are available over the same `/mcp` endpoint
+- The original `_meta.progressToken` stays valid for task-backed `update_database` calls, so `notifications/progress` can continue after the initial `CreateTaskResult`
+- `get_active_operation` remains available as a compatibility fallback for clients that do not consume Tasks yet
+
+Minimal task-augmented `update_database` request:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "update_database",
+    "arguments": {
+      "projectName": "MyProject",
+      "applicationId": "app-id"
+    },
+    "task": {
+      "ttl": 600000
+    },
+    "_meta": {
+      "progressToken": "update-task-1"
+    }
+  }
+}
+```
+
+The initial response returns `CreateTaskResult`, and the final tool payload is retrieved later through `tasks/result`.
+
 ## Connecting AI Assistants
 
 ### VS Code / GitHub Copilot
@@ -274,7 +310,7 @@ Add to `claude_desktop_config.json`:
 | `get_tags` | Get list of all tags defined in the project with descriptions and object counts |
 | `get_objects_by_tags` | Get metadata objects filtered by tags with tag descriptions and object FQNs |
 | `get_applications` | Get list of applications (infobases) for a project with update state |
-| `update_database` | Update database (infobase) with full or incremental update mode |
+| `update_database` | Update database (infobase) with full or incremental update mode; supports task augmentation |
 | `get_active_operation` | Get the current long-running operation progress snapshot for polling fallback |
 | `debug_launch` | Launch application in debug mode (auto-updates database before launch) |
 | `get_form_screenshot` | Capture PNG screenshot of form WYSIWYG editor (embedded image resource) |
@@ -545,6 +581,8 @@ Add to `claude_desktop_config.json`:
 - Tracks stage-aware runtime progress in the EDT status bar
 - Emits MCP `notifications/progress` only when the client supplies `_meta.progressToken`
 - Keeps the final JSON result format unchanged for clients that do not consume progress notifications
+- Can also be invoked as a task-backed `tools/call` request (`execution.taskSupport: "optional"`)
+- Final task result is retrieved via `tasks/result`; `tasks/get`/`tasks/list` provide status polling
 
 Typical stages:
 - `validation`
@@ -767,7 +805,7 @@ Typical stages:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/mcp` | POST | MCP JSON-RPC (initialize, tools/list, tools/call) |
+| `/mcp` | POST | MCP JSON-RPC (`initialize`, `tools/list`, `tools/call`, `tasks/get`, `tasks/list`, `tasks/result`, `tasks/cancel`) |
 | `/mcp` | GET | Server info |
 | `/health` | GET | Health check |
 
