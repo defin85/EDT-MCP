@@ -344,8 +344,8 @@ Add to `claude_desktop_config.json`:
 | Tool | Description |
 |------|-------------|
 | `get_edt_version` | Returns current EDT version |
-| `list_projects` | Lists workspace projects with properties |
-| `get_configuration_properties` | Gets 1C configuration properties |
+| `list_projects` | Lists workspace projects with project kind, capability hints, and extension metadata |
+| `get_configuration_properties` | Gets 1C configuration properties (configuration-only in this rollout) |
 | `get_project_errors` | Returns EDT problems with severity/checkId/objects filters |
 | `get_problem_summary` | Problem counts grouped by project and severity |
 | `clean_project` | Cleans project markers and triggers full revalidation; async-first at runtime |
@@ -358,27 +358,59 @@ Add to `claude_desktop_config.json`:
 | `get_metadata_objects` | Get list of metadata objects from 1C configuration |
 | `get_metadata_details` | Get detailed properties of metadata objects (attributes, tabular sections, etc.) |
 | `find_references` | Find all references to a metadata object (in metadata, BSL code, forms, roles, etc.) — top-level objects only |
-| `rename_metadata_object` | Rename a metadata object or attribute with full refactoring: cascading updates in BSL code, forms, and metadata. Preview + confirm workflow |
-| `delete_metadata_object` | Delete a metadata object or attribute with reference cleanup. Preview + confirm workflow |
-| `add_metadata_attribute` | Add a new attribute to a metadata object (Catalog, Document, Register, etc.) |
+| `rename_metadata_object` | Rename a metadata object or attribute with full refactoring: cascading updates in BSL code, forms, and metadata. Preview + confirm workflow; extension write/refactor remains guarded |
+| `delete_metadata_object` | Delete a metadata object or attribute with reference cleanup. Preview + confirm workflow; extension write/refactor remains guarded |
+| `add_metadata_attribute` | Add a new attribute to a metadata object (Catalog, Document, Register, etc.); extension write/refactor remains guarded |
 | `get_tags` | Get list of all tags defined in the project with descriptions and object counts |
 | `get_objects_by_tags` | Get metadata objects filtered by tags with tag descriptions and object FQNs |
-| `get_applications` | Get list of applications (infobases) for a project with update state |
-| `update_database` | Update database (infobase) with full or incremental update mode; async-first at runtime and still supports explicit task augmentation |
+| `get_applications` | Get list of applications (infobases) for a project with update state; configuration-only in this rollout |
+| `update_database` | Update database (infobase) with full or incremental update mode; async-first at runtime, explicit task augmentation, and configuration-only extension rejection |
 | `get_operation_snapshot` | Get the progress snapshot for a specific tracked long-running operation by `operationId` |
 | `get_active_operation` | Get the current long-running operation progress snapshot for polling fallback |
-| `debug_launch` | Launch application in debug mode (auto-updates database before launch) |
+| `debug_launch` | Launch application in debug mode (auto-updates database before launch); configuration-only in this rollout |
 | `get_form_screenshot` | Capture PNG screenshot of form WYSIWYG editor (embedded image resource) |
 | `list_modules` | List all BSL modules in a project with module type and parent object |
 | `get_module_structure` | Get BSL module structure: procedures/functions, signatures, regions, parameters |
 | `read_module_source` | Read BSL module source code with line numbers (full file or line range) |
-| `write_module_source` | Write BSL source code to metadata object modules (searchReplace, replace, append) with syntax check |
+| `write_module_source` | Write BSL source code to metadata object modules (searchReplace, replace, append) with syntax check; extension writes remain guarded |
 | `read_method_source` | Read a specific procedure/function from a BSL module by name |
 | `search_in_code` | Full-text/regex search across BSL modules with outputMode: full/count/files |
 | `get_method_call_hierarchy` | Find method callers or callees via semantic BSL analysis |
 | `go_to_definition` | Navigate to symbol definition (method by name, metadata object by FQN) |
 | `get_symbol_info` | Get type/hover info about a symbol at a BSL code position (inferred types, signatures, docs) |
 | `validate_query` | Validate 1C query text in project context (syntax + semantic errors, optional DCS mode) |
+
+## Project Kinds And Extension Support
+
+`list_projects` remains markdown-friendly for people and now also carries additive deterministic
+project records through MCP `structuredContent`. Each EDT project record exposes:
+
+- `projectKind`: `configuration`, `extension`, or `unknown`
+- `capabilityCategories`: `metadataRead`, `moduleRead`, `mutationRefactor`, `runtimeApplication`
+- extension metadata when the project is an EDT extension project
+
+Verified first-wave extension support in this rollout:
+
+- `get_metadata_objects`
+- `get_metadata_details`
+- `list_modules`
+- `read_module_source`
+- `read_method_source`
+- `get_module_structure`
+- `search_in_code`
+
+Stable extension failure categories:
+
+- `configuration_only`: runtime/application flows and `get_configuration_properties` stay configuration-only
+- `unsupported_extension_operation`: the tool is outside the verified extension matrix for this rollout
+- `extension_model_unavailable`: EDT did not provide the extension-compatible metadata or BSL model needed by a supported read path
+
+Current non-goals for extension projects in this rollout:
+
+- no extension lifecycle/runtime flows: `get_applications`, `update_database`, `debug_launch`
+- no extension configuration-properties contract: `get_configuration_properties`
+- no extension mutation/refactor flows: `add_metadata_attribute`, `rename_metadata_object`, `delete_metadata_object`, `write_module_source`
+- no advanced semantic navigation outside the verified matrix: `find_references`, `go_to_definition`, `get_method_call_hierarchy`, `get_symbol_info`, `get_content_assist`
 
 <details>
 <summary><strong>Tool Details</strong> - Parameters and usage examples for each tool</summary>
@@ -866,7 +898,7 @@ Typical stages:
 
 ### Output Formats
 
-- **Markdown tools**: `list_projects`, `get_project_errors`, `get_bookmarks`, `get_tasks`, `get_problem_summary`, `get_check_description` - return Markdown as EmbeddedResource with `mimeType: text/markdown`
+- **Markdown tools**: return Markdown as EmbeddedResource with `mimeType: text/markdown`; selected tools can additionally attach additive `structuredContent` for deterministic discovery or stable failure categories (`list_projects` is the primary discovery example)
 - **JSON tools**: `get_configuration_properties`, `clean_project`, `revalidate_objects` - return JSON with `structuredContent`
 - **Text tools**: `get_edt_version` - return plain text
 

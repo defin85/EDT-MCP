@@ -31,6 +31,10 @@ import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.FrontMatter;
 import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
+import com.ditrix.edt.mcp.server.utils.ProjectCapability;
+import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to navigate to the definition of a symbol (method, metadata object).
@@ -43,6 +47,7 @@ import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
 public class GoToDefinitionTool implements IMcpTool
 {
     public static final String NAME = "go_to_definition"; //$NON-NLS-1$
+    private static final ThreadLocal<ProjectCapabilityFailure> LAST_FAILURE = new ThreadLocal<>();
 
     @Override
     public String getName()
@@ -96,6 +101,7 @@ public class GoToDefinitionTool implements IMcpTool
     @Override
     public String execute(Map<String, String> params)
     {
+        LAST_FAILURE.remove();
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String symbol = JsonUtils.extractStringArgument(params, "symbol"); //$NON-NLS-1$
         String modulePath = JsonUtils.extractStringArgument(params, "modulePath"); //$NON-NLS-1$
@@ -108,6 +114,16 @@ public class GoToDefinitionTool implements IMcpTool
         if (symbol == null || symbol.isEmpty())
         {
             return "Error: symbol is required"; //$NON-NLS-1$
+        }
+
+        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
+        if (context != null && context.isExtensionProject())
+        {
+            ProjectCapabilityFailure failure = ProjectCapabilityFailure.unsupportedExtensionOperation(NAME, context,
+                    ProjectCapability.MODULE_READ,
+                    "Semantic go-to-definition is outside the verified extension matrix in this rollout."); //$NON-NLS-1$
+            LAST_FAILURE.set(failure);
+            return failure.toMarkdown();
         }
 
         boolean includeSource = !"false".equalsIgnoreCase(includeSourceStr); //$NON-NLS-1$
@@ -130,6 +146,20 @@ public class GoToDefinitionTool implements IMcpTool
         });
 
         return resultRef.get();
+    }
+
+    @Override
+    public Object getStructuredContent(Map<String, String> params, String result)
+    {
+        try
+        {
+            ProjectCapabilityFailure failure = LAST_FAILURE.get();
+            return failure != null ? failure.toStructuredContent() : null;
+        }
+        finally
+        {
+            LAST_FAILURE.remove();
+        }
     }
 
     // ========== Main resolution logic ==========

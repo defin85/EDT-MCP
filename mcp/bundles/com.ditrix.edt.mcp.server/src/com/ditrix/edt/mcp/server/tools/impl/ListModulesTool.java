@@ -43,6 +43,9 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
+import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to list all BSL modules in a project or for a specific metadata object.
@@ -51,6 +54,7 @@ import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
 public class ListModulesTool implements IMcpTool
 {
     public static final String NAME = "list_modules"; //$NON-NLS-1$
+    private static final ThreadLocal<ProjectCapabilityFailure> LAST_FAILURE = new ThreadLocal<>();
 
     private static final int MAX_RECURSION_DEPTH = 20;
 
@@ -108,6 +112,7 @@ public class ListModulesTool implements IMcpTool
     @Override
     public String execute(Map<String, String> params)
     {
+        LAST_FAILURE.remove();
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String metadataType = JsonUtils.extractStringArgument(params, "metadataType"); //$NON-NLS-1$
         String objectName = JsonUtils.extractStringArgument(params, "objectName"); //$NON-NLS-1$
@@ -127,16 +132,19 @@ public class ListModulesTool implements IMcpTool
         limit = Math.min(Math.max(1, limit), 1000);
 
         AtomicReference<String> resultRef = new AtomicReference<>();
+        AtomicReference<ProjectCapabilityFailure> failureRef = new AtomicReference<>();
         final String mdType = metadataType;
         final String objName = objectName;
         final String filter = nameFilter;
         final int maxResults = limit;
+        final ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
 
         Display display = PlatformUI.getWorkbench().getDisplay();
         display.syncExec(() -> {
             try
             {
-                String result = listModulesInternal(projectName, mdType, objName, filter, maxResults);
+                String result = listModulesInternal(context, projectName, mdType, objName, filter, maxResults,
+                        failureRef);
                 resultRef.set(result);
             }
             catch (Exception e)
@@ -146,13 +154,35 @@ public class ListModulesTool implements IMcpTool
             }
         });
 
+        ProjectCapabilityFailure failure = failureRef.get();
+        if (failure != null)
+        {
+            LAST_FAILURE.set(failure);
+        }
+
         return resultRef.get();
     }
 
-    private String listModulesInternal(String projectName, String metadataType,
-                                        String objectName, String nameFilter, int limit)
+    @Override
+    public Object getStructuredContent(Map<String, String> params, String result)
     {
-        IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
+        try
+        {
+            ProjectCapabilityFailure failure = LAST_FAILURE.get();
+            return failure != null ? failure.toStructuredContent() : null;
+        }
+        finally
+        {
+            LAST_FAILURE.remove();
+        }
+    }
+
+    private String listModulesInternal(ResolvedProjectContext context, String projectName, String metadataType,
+                                        String objectName, String nameFilter, int limit,
+                                        AtomicReference<ProjectCapabilityFailure> failureRef)
+    {
+        IProject project = context != null && context.getProject() != null ? context.getProject()
+                : ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
         if (project == null || !project.exists())
         {
             return "Error: Project not found: " + projectName; //$NON-NLS-1$
@@ -178,6 +208,13 @@ public class ListModulesTool implements IMcpTool
         Configuration config = configProvider.getConfiguration(project);
         if (config == null)
         {
+            if (context != null && context.isExtensionProject())
+            {
+                ProjectCapabilityFailure failure = ProjectCapabilityFailure.extensionModelUnavailable(NAME, context,
+                        "EDT did not provide a configuration model for typed module discovery in the extension project."); //$NON-NLS-1$
+                failureRef.set(failure);
+                return failure.toMarkdown();
+            }
             return "Error: Could not get configuration for project: " + projectName; //$NON-NLS-1$
         }
 

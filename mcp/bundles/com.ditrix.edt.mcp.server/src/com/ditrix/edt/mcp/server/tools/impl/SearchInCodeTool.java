@@ -26,6 +26,8 @@ import com.ditrix.edt.mcp.server.Activator;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool for full-text search across all BSL modules in a project.
@@ -153,8 +155,9 @@ public class SearchInCodeTool implements IMcpTool
         maxResults = Math.min(Math.max(1, maxResults), ABSOLUTE_MAX_RESULTS);
         contextLines = Math.min(Math.max(0, contextLines), MAX_CONTEXT_LINES);
 
-        // Get project
-        IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
+        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
+        IProject project = context != null && context.getProject() != null ? context.getProject()
+                : ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
         if (project == null || !project.exists())
         {
             return "Error: Project not found: " + projectName; //$NON-NLS-1$

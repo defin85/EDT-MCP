@@ -483,6 +483,58 @@ public class McpProtocolHandlerTest
     }
 
     @Test
+    public void testToolCallMarkdownPayloadCarriesStructuredContent() throws Exception
+    {
+        registry.register(new IMcpTool()
+        {
+            @Override
+            public String getName()
+            {
+                return "markdown_structured_tool"; //$NON-NLS-1$
+            }
+
+            @Override
+            public String getDescription()
+            {
+                return "Markdown structured tool"; //$NON-NLS-1$
+            }
+
+            @Override
+            public String getInputSchema()
+            {
+                return "{\"type\":\"object\"}"; //$NON-NLS-1$
+            }
+
+            @Override
+            public String execute(Map<String, String> params)
+            {
+                return "## Workspace Projects"; //$NON-NLS-1$
+            }
+
+            @Override
+            public Object getStructuredContent(Map<String, String> params, String result)
+            {
+                return JsonParser.parseString("{\"success\":true,\"projectCount\":2}"); //$NON-NLS-1$
+            }
+
+            @Override
+            public ResponseType getResponseType()
+            {
+                return ResponseType.MARKDOWN;
+            }
+        });
+        installTestActivator(new McpServer());
+
+        String response = handler.processRequest(buildToolCallRequest(1, "markdown_structured_tool", "{}")); //$NON-NLS-1$ //$NON-NLS-2$
+
+        JsonObject json = parseResponse(response);
+        JsonObject result = json.getAsJsonObject("result"); //$NON-NLS-1$
+        assertTrue(result.has("structuredContent")); //$NON-NLS-1$
+        assertEquals(2, result.getAsJsonObject("structuredContent").get("projectCount").getAsInt()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertEquals("resource", result.getAsJsonArray("content").get(0).getAsJsonObject().get("type").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+    }
+
+    @Test
     public void testAttachTaskResultMetaAddsDetachedContinuationWhenSnapshotExists()
     {
         McpServer server = new McpServer();

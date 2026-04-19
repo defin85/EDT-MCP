@@ -142,4 +142,19 @@ public interface IMcpTool
     {
         return getName() + ".md"; //$NON-NLS-1$
     }
+
+    /**
+     * Returns optional additive structuredContent for tools whose primary response is not JSON.
+     *
+     * <p>This enables markdown-first tools to expose deterministic machine-readable records
+     * alongside human-readable embedded resources.
+     *
+     * @param params execution parameters
+     * @param result textual or resource payload returned by {@link #execute(Map)}
+     * @return structured content object for MCP payload, or {@code null} when not used
+     */
+    default Object getStructuredContent(Map<String, String> params, String result)
+    {
+        return null;
+    }
 }

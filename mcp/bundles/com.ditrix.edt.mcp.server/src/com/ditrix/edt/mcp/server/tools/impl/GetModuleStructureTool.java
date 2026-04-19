@@ -37,6 +37,9 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.MarkdownUtils;
+import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to get the structure of a BSL module: methods, signatures, regions, export flags.
@@ -44,6 +47,7 @@ import com.ditrix.edt.mcp.server.utils.MarkdownUtils;
 public class GetModuleStructureTool implements IMcpTool
 {
     public static final String NAME = "get_module_structure"; //$NON-NLS-1$
+    private static final ThreadLocal<ProjectCapabilityFailure> LAST_FAILURE = new ThreadLocal<>();
 
     @Override
     public String getName()
@@ -95,6 +99,7 @@ public class GetModuleStructureTool implements IMcpTool
     @Override
     public String execute(Map<String, String> params)
     {
+        LAST_FAILURE.remove();
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String modulePath = JsonUtils.extractStringArgument(params, "modulePath"); //$NON-NLS-1$
         boolean includeVariables = JsonUtils.extractBooleanArgument(params, "includeVariables", false); //$NON-NLS-1$
@@ -111,12 +116,15 @@ public class GetModuleStructureTool implements IMcpTool
 
         // Try EMF approach first (on UI thread)
         AtomicReference<String> resultRef = new AtomicReference<>();
+        AtomicReference<ProjectCapabilityFailure> failureRef = new AtomicReference<>();
+        final ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
 
         Display display = PlatformUI.getWorkbench().getDisplay();
         display.syncExec(() -> {
             try
             {
-                String result = getStructureInternal(projectName, modulePath, includeVariables, includeComments);
+                String result = getStructureInternal(context, projectName, modulePath, includeVariables,
+                        includeComments, failureRef);
                 resultRef.set(result);
             }
             catch (Exception e)
@@ -125,6 +133,12 @@ public class GetModuleStructureTool implements IMcpTool
                 resultRef.set(null); // Signal to try fallback
             }
         });
+
+        ProjectCapabilityFailure failure = failureRef.get();
+        if (failure != null)
+        {
+            LAST_FAILURE.set(failure);
+        }
 
         String result = resultRef.get();
         if (result != null)
@@ -136,10 +150,25 @@ public class GetModuleStructureTool implements IMcpTool
                "Make sure project '" + projectName + "' is open and fully indexed in EDT."; //$NON-NLS-1$ //$NON-NLS-2$
     }
 
-    private String getStructureInternal(String projectName, String modulePath,
-        boolean includeVariables, boolean includeComments)
+    @Override
+    public Object getStructuredContent(Map<String, String> params, String result)
     {
-        IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
+        try
+        {
+            ProjectCapabilityFailure failure = LAST_FAILURE.get();
+            return failure != null ? failure.toStructuredContent() : null;
+        }
+        finally
+        {
+            LAST_FAILURE.remove();
+        }
+    }
+
+    private String getStructureInternal(ResolvedProjectContext context, String projectName, String modulePath,
+        boolean includeVariables, boolean includeComments, AtomicReference<ProjectCapabilityFailure> failureRef)
+    {
+        IProject project = context != null && context.getProject() != null ? context.getProject()
+                : ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
         if (project == null || !project.exists())
         {
             return "Error: Project not found: " + projectName; //$NON-NLS-1$
@@ -148,6 +177,13 @@ public class GetModuleStructureTool implements IMcpTool
         Module module = BslModuleUtils.loadModule(project, modulePath);
         if (module == null)
         {
+            if (context != null && context.isExtensionProject())
+            {
+                ProjectCapabilityFailure failure = ProjectCapabilityFailure.extensionModelUnavailable(NAME, context,
+                        "EDT did not provide a compatible BSL model for extension module structure inspection."); //$NON-NLS-1$
+                failureRef.set(failure);
+                return failure.toMarkdown();
+            }
             return "Error: BSL model is not available for '" + modulePath + "'\n" + //$NON-NLS-1$ //$NON-NLS-2$
                    "Make sure project '" + projectName + "' is open and fully indexed in EDT."; //$NON-NLS-1$ //$NON-NLS-2$
         }

@@ -27,6 +27,9 @@ import com.ditrix.edt.mcp.server.Activator;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to get 1C:Enterprise configuration properties.
@@ -78,6 +81,17 @@ public class GetConfigurationPropertiesTool implements IMcpTool
     public static String getConfigurationProperties(String projectName)
     {
         Activator.logInfo("getConfigurationProperties: Starting..."); //$NON-NLS-1$
+
+        if (projectName != null && !projectName.isEmpty())
+        {
+            ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
+            if (context != null && context.isExtensionProject())
+            {
+                return ProjectCapabilityFailure.configurationOnly(NAME, context,
+                        "Extension-specific property semantics are not part of the configuration-properties contract yet.") //$NON-NLS-1$
+                        .toJson();
+            }
+        }
         
         // Execute in UI thread to avoid blocking
         final String[] result = new String[1];

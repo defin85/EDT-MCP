@@ -30,6 +30,11 @@ does not expose a project-kind model or enforce tool capability boundaries consi
     - module read
     - mutation/refactor
     - runtime/application
+  - Discovery exposure in this rollout:
+    - `list_projects` must provide deterministic machine-readable project records for
+      `projectKind`, capability categories, and extension metadata where available.
+    - Human-readable markdown may remain for compatibility, but agents must not be forced to infer
+      capability hints by parsing free-form prose or brittle table formatting alone.
   - Rationale: agents need a predictable discovery surface even if `list_projects` remains a
     markdown-first tool for compatibility.
 
@@ -41,6 +46,18 @@ does not expose a project-kind model or enforce tool capability boundaries consi
   - Rationale: agents should know whether a project is a configuration or extension before choosing
     a tool, but existing markdown-oriented discovery clients should not lose compatibility in this
     rollout.
+
+- Decision: include a bounded MCP transport refactor in this change so markdown-first discovery can
+  carry deterministic structured project records alongside embedded markdown.
+  - Alternatives considered:
+    - leave `list_projects` as table-only markdown
+    - create a separate follow-up change for transport support
+  - Boundaries:
+    - keep the existing embedded markdown resource for compatibility
+    - add only the minimum wire-level support needed for structured discovery payloads
+    - do not redesign unrelated tool result shapes in this rollout
+  - Rationale: the discovery contract is part of the extension-support architecture, and deferring
+    machine-readable transport would leave the rollout agent-fragile by construction.
 
 - Decision: keep runtime/application flows configuration-only until a dedicated extension lifecycle
   surface is approved.
@@ -62,6 +79,9 @@ does not expose a project-kind model or enforce tool capability boundaries consi
   different shape in others.
 - Write and refactor flows may behave differently for native vs adopted extension objects.
 - If capability checks are too coarse, valid extension read flows may be blocked unnecessarily.
+- The current MCP transport in this repository exposes `structuredContent` only for JSON-response
+  tools, so even the bounded discovery refactor needs careful compatibility verification for
+  markdown-oriented clients and tests.
 
 ## Migration Plan
 

@@ -54,6 +54,19 @@ public class ToolCallResultTest
         var item = result.getContent().get(0);
         assertEquals("resource", item.getType());
         assertNotNull(item.getResource());
+        assertNull(result.getStructuredContent());
+    }
+
+    @Test
+    public void testResourceResultWithStructuredContent()
+    {
+        JsonElement structured = JsonParser.parseString("{\"projectCount\":2}");
+        ToolCallResult result = ToolCallResult.resource(
+            "embedded://result.md", "text/markdown", "# Title", structured);
+
+        assertEquals(1, result.getContent().size());
+        assertNotNull(result.getContent().get(0).getResource());
+        assertEquals(structured, result.getStructuredContent());
     }
 
     @Test

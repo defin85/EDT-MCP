@@ -42,6 +42,9 @@ import com.ditrix.edt.mcp.server.Activator;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to get list of metadata objects from 1C configuration.
@@ -50,6 +53,7 @@ import com.ditrix.edt.mcp.server.tools.IMcpTool;
 public class GetMetadataObjectsTool implements IMcpTool
 {
     public static final String NAME = "get_metadata_objects"; //$NON-NLS-1$
+    private static final ThreadLocal<ProjectCapabilityFailure> LAST_FAILURE = new ThreadLocal<>();
     
     /** Metadata type constants (all lowercase for case-insensitive matching) */
     private static final String TYPE_ALL = "all"; //$NON-NLS-1$
@@ -123,6 +127,7 @@ public class GetMetadataObjectsTool implements IMcpTool
     @Override
     public String execute(Map<String, String> params)
     {
+        LAST_FAILURE.remove();
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String metadataType = JsonUtils.extractStringArgument(params, "metadataType"); //$NON-NLS-1$
         String nameFilter = JsonUtils.extractStringArgument(params, "nameFilter"); //$NON-NLS-1$
@@ -157,16 +162,19 @@ public class GetMetadataObjectsTool implements IMcpTool
         
         // Execute on UI thread
         AtomicReference<String> resultRef = new AtomicReference<>();
+        AtomicReference<ProjectCapabilityFailure> failureRef = new AtomicReference<>();
         final String mdType = metadataType;
         final String filter = nameFilter;
         final int maxResults = limit;
         final String lang = language; // null means use config default
+        final ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
         
         Display display = PlatformUI.getWorkbench().getDisplay();
         display.syncExec(() -> {
             try
             {
-                String result = getMetadataObjectsInternal(projectName, mdType, filter, maxResults, lang);
+                String result = getMetadataObjectsInternal(context, projectName, mdType, filter, maxResults, lang,
+                        failureRef);
                 resultRef.set(result);
             }
             catch (Exception e)
@@ -175,18 +183,39 @@ public class GetMetadataObjectsTool implements IMcpTool
                 resultRef.set("Error: " + e.getMessage()); //$NON-NLS-1$
             }
         });
+
+        ProjectCapabilityFailure failure = failureRef.get();
+        if (failure != null)
+        {
+            LAST_FAILURE.set(failure);
+        }
         
         return resultRef.get();
+    }
+
+    @Override
+    public Object getStructuredContent(Map<String, String> params, String result)
+    {
+        try
+        {
+            ProjectCapabilityFailure failure = LAST_FAILURE.get();
+            return failure != null ? failure.toStructuredContent() : null;
+        }
+        finally
+        {
+            LAST_FAILURE.remove();
+        }
     }
     
     /**
      * Internal implementation that runs on UI thread.
      */
-    private String getMetadataObjectsInternal(String projectName, String metadataType,
-                                               String nameFilter, int limit, String language)
+    private String getMetadataObjectsInternal(ResolvedProjectContext context, String projectName, String metadataType,
+                                               String nameFilter, int limit, String language,
+                                               AtomicReference<ProjectCapabilityFailure> failureRef)
     {
-        // Get project
-        IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
+        IProject project = context != null && context.getProject() != null ? context.getProject()
+                : ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
         if (project == null || !project.exists())
         {
             return "Error: Project not found: " + projectName; //$NON-NLS-1$
@@ -202,6 +231,13 @@ public class GetMetadataObjectsTool implements IMcpTool
         Configuration config = configProvider.getConfiguration(project);
         if (config == null)
         {
+            if (context != null && context.isExtensionProject())
+            {
+                ProjectCapabilityFailure failure = ProjectCapabilityFailure.extensionModelUnavailable(NAME, context,
+                        "EDT did not provide a configuration model for extension metadata reads."); //$NON-NLS-1$
+                failureRef.set(failure);
+                return failure.toMarkdown();
+            }
             return "Error: Could not get configuration for project: " + projectName; //$NON-NLS-1$
         }
         

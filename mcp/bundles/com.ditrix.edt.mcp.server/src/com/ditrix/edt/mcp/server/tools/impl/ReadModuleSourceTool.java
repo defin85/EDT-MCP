@@ -17,6 +17,8 @@ import org.eclipse.core.runtime.Path;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to read BSL module source code (whole file or line range).
@@ -95,8 +97,9 @@ public class ReadModuleSourceTool implements IMcpTool
             return "Error: modulePath is required. Example: 'CommonModules/MyModule/Module.bsl'"; //$NON-NLS-1$
         }
 
-        // Get project
-        IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
+        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
+        IProject project = context != null && context.getProject() != null ? context.getProject()
+                : ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
         if (project == null || !project.exists())
         {
             return "Error: Project not found: " + projectName; //$NON-NLS-1$

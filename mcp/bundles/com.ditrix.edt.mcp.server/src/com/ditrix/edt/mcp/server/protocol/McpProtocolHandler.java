@@ -620,7 +620,14 @@ public class McpProtocolHandler
 
     private JsonElement buildToolCallResourcePayload(String content, String mimeType, String fileName)
     {
-        return GsonProvider.get().toJsonTree(ToolCallResult.resource("embedded://" + fileName, mimeType, content)); //$NON-NLS-1$
+        return buildToolCallResourcePayload(content, mimeType, fileName, null);
+    }
+
+    private JsonElement buildToolCallResourcePayload(String content, String mimeType, String fileName,
+            Object structuredContent)
+    {
+        return GsonProvider.get()
+                .toJsonTree(ToolCallResult.resource("embedded://" + fileName, mimeType, content, structuredContent)); //$NON-NLS-1$
     }
 
     private JsonElement buildToolCallResourceBlobPayload(String base64Blob, String mimeType, String fileName)
@@ -716,7 +723,8 @@ public class McpProtocolHandler
                 {
                     return buildToolCallTextPayload(result);
                 }
-                return buildToolCallResourcePayload(result, "text/markdown", tool.getResultFileName(params)); //$NON-NLS-1$
+                return buildToolCallResourcePayload(result, "text/markdown", tool.getResultFileName(params), //$NON-NLS-1$
+                        tool.getStructuredContent(params, result));
             case IMAGE:
                 if (isJsonErrorPayload(result))
                 {

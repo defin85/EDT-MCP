@@ -27,6 +27,8 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.FrontMatter;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to read a specific procedure/function from a BSL module.
@@ -101,12 +103,13 @@ public class ReadMethodSourceTool implements IMcpTool
 
         // Try EMF approach first (on UI thread)
         AtomicReference<String> resultRef = new AtomicReference<>();
+        final ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
 
         Display display = PlatformUI.getWorkbench().getDisplay();
         display.syncExec(() -> {
             try
             {
-                String result = readMethodViaEmf(projectName, modulePath, methodName);
+                String result = readMethodViaEmf(context, projectName, modulePath, methodName);
                 resultRef.set(result);
             }
             catch (Exception e)
@@ -123,15 +126,17 @@ public class ReadMethodSourceTool implements IMcpTool
         }
 
         // Fallback: text-based approach
-        return readMethodViaText(projectName, modulePath, methodName);
+        return readMethodViaText(context, projectName, modulePath, methodName);
     }
 
     /**
      * Primary approach: Read method using BSL EMF model.
      */
-    private String readMethodViaEmf(String projectName, String modulePath, String methodName)
+    private String readMethodViaEmf(ResolvedProjectContext context, String projectName, String modulePath,
+        String methodName)
     {
-        IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
+        IProject project = context != null && context.getProject() != null ? context.getProject()
+                : ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
         if (project == null || !project.exists())
         {
             return "Error: Project not found: " + projectName; //$NON-NLS-1$
@@ -211,9 +216,11 @@ public class ReadMethodSourceTool implements IMcpTool
     /**
      * Fallback approach: Read method using text search.
      */
-    private String readMethodViaText(String projectName, String modulePath, String methodName)
+    private String readMethodViaText(ResolvedProjectContext context, String projectName, String modulePath,
+        String methodName)
     {
-        IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
+        IProject project = context != null && context.getProject() != null ? context.getProject()
+                : ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
         if (project == null || !project.exists())
         {
             return "Error: Project not found: " + projectName; //$NON-NLS-1$

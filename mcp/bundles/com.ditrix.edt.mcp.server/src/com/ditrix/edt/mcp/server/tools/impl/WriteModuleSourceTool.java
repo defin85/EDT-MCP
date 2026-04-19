@@ -26,6 +26,10 @@ import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.FrontMatter;
 import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
+import com.ditrix.edt.mcp.server.utils.ProjectCapability;
+import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to write BSL source code to 1C metadata object modules.
@@ -36,6 +40,7 @@ import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
 public class WriteModuleSourceTool implements IMcpTool
 {
     public static final String NAME = "write_module_source"; //$NON-NLS-1$
+    private static final ThreadLocal<ProjectCapabilityFailure> LAST_FAILURE = new ThreadLocal<>();
 
     private static final String MODE_REPLACE = "replace"; //$NON-NLS-1$
     private static final String MODE_APPEND = "append"; //$NON-NLS-1$
@@ -131,6 +136,7 @@ public class WriteModuleSourceTool implements IMcpTool
     @Override
     public String execute(Map<String, String> params)
     {
+        LAST_FAILURE.remove();
         // 1. Extract parameters
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String modulePath = JsonUtils.extractStringArgument(params, "modulePath"); //$NON-NLS-1$
@@ -205,6 +211,16 @@ public class WriteModuleSourceTool implements IMcpTool
         if (!modulePath.endsWith(".bsl")) //$NON-NLS-1$
         {
             return "Error: only .bsl module files can be written"; //$NON-NLS-1$
+        }
+
+        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
+        if (context != null && context.isExtensionProject())
+        {
+            ProjectCapabilityFailure failure = ProjectCapabilityFailure.unsupportedExtensionOperation(NAME, context,
+                    ProjectCapability.MUTATION_REFACTOR,
+                    "Module writes stay guarded until extension mutation support is verified."); //$NON-NLS-1$
+            LAST_FAILURE.set(failure);
+            return failure.toMarkdown();
         }
 
         // 4. Validate project
@@ -345,6 +361,20 @@ public class WriteModuleSourceTool implements IMcpTool
         catch (Exception e)
         {
             return "Error writing file: " + e.getMessage(); //$NON-NLS-1$
+        }
+    }
+
+    @Override
+    public Object getStructuredContent(Map<String, String> params, String result)
+    {
+        try
+        {
+            ProjectCapabilityFailure failure = LAST_FAILURE.get();
+            return failure != null ? failure.toStructuredContent() : null;
+        }
+        finally
+        {
+            LAST_FAILURE.remove();
         }
     }
 

@@ -36,6 +36,10 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.MarkdownUtils;
+import com.ditrix.edt.mcp.server.utils.ProjectCapability;
+import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to find method call hierarchy - who calls this method (callers)
@@ -46,6 +50,7 @@ import com.ditrix.edt.mcp.server.utils.MarkdownUtils;
 public class GetMethodCallHierarchyTool implements IMcpTool
 {
     public static final String NAME = "get_method_call_hierarchy"; //$NON-NLS-1$
+    private static final ThreadLocal<ProjectCapabilityFailure> LAST_FAILURE = new ThreadLocal<>();
 
     @Override
     public String getName()
@@ -100,6 +105,7 @@ public class GetMethodCallHierarchyTool implements IMcpTool
     @Override
     public String execute(Map<String, String> params)
     {
+        LAST_FAILURE.remove();
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String modulePath = JsonUtils.extractStringArgument(params, "modulePath"); //$NON-NLS-1$
         String methodName = JsonUtils.extractStringArgument(params, "methodName"); //$NON-NLS-1$
@@ -117,6 +123,16 @@ public class GetMethodCallHierarchyTool implements IMcpTool
         if (methodName == null || methodName.isEmpty())
         {
             return "Error: methodName is required"; //$NON-NLS-1$
+        }
+
+        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
+        if (context != null && context.isExtensionProject())
+        {
+            ProjectCapabilityFailure failure = ProjectCapabilityFailure.unsupportedExtensionOperation(NAME, context,
+                    ProjectCapability.MODULE_READ,
+                    "Semantic call hierarchy analysis is outside the verified extension matrix in this rollout."); //$NON-NLS-1$
+            LAST_FAILURE.set(failure);
+            return failure.toMarkdown();
         }
 
         if (direction == null || direction.isEmpty())
@@ -159,6 +175,20 @@ public class GetMethodCallHierarchyTool implements IMcpTool
         });
 
         return resultRef.get();
+    }
+
+    @Override
+    public Object getStructuredContent(Map<String, String> params, String result)
+    {
+        try
+        {
+            ProjectCapabilityFailure failure = LAST_FAILURE.get();
+            return failure != null ? failure.toStructuredContent() : null;
+        }
+        finally
+        {
+            LAST_FAILURE.remove();
+        }
     }
 
     /**

@@ -51,6 +51,10 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.utils.ProjectCapability;
+import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to find all references to a metadata object.
@@ -60,6 +64,7 @@ import com.ditrix.edt.mcp.server.tools.IMcpTool;
 public class FindReferencesTool implements IMcpTool
 {
     public static final String NAME = "find_references"; //$NON-NLS-1$
+    private static final ThreadLocal<ProjectCapabilityFailure> LAST_FAILURE = new ThreadLocal<>();
     
     @Override
     public String getName()
@@ -114,6 +119,7 @@ public class FindReferencesTool implements IMcpTool
     @Override
     public String execute(Map<String, String> params)
     {
+        LAST_FAILURE.remove();
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String objectFqn = JsonUtils.extractStringArgument(params, "objectFqn"); //$NON-NLS-1$
         String limitStr = JsonUtils.extractStringArgument(params, "limit"); //$NON-NLS-1$
@@ -126,6 +132,16 @@ public class FindReferencesTool implements IMcpTool
         if (objectFqn == null || objectFqn.isEmpty())
         {
             return "Error: objectFqn is required"; //$NON-NLS-1$
+        }
+
+        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
+        if (context != null && context.isExtensionProject())
+        {
+            ProjectCapabilityFailure failure = ProjectCapabilityFailure.unsupportedExtensionOperation(NAME, context,
+                    ProjectCapability.METADATA_READ,
+                    "Reference graph inspection is outside the verified extension matrix in this rollout."); //$NON-NLS-1$
+            LAST_FAILURE.set(failure);
+            return failure.toMarkdown();
         }
         
         int limit = 100;
@@ -160,6 +176,20 @@ public class FindReferencesTool implements IMcpTool
         });
         
         return resultRef.get();
+    }
+
+    @Override
+    public Object getStructuredContent(Map<String, String> params, String result)
+    {
+        try
+        {
+            ProjectCapabilityFailure failure = LAST_FAILURE.get();
+            return failure != null ? failure.toStructuredContent() : null;
+        }
+        finally
+        {
+            LAST_FAILURE.remove();
+        }
     }
     
     /**

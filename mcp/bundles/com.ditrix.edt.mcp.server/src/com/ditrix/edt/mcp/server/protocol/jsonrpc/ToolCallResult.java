@@ -47,8 +47,17 @@ public class ToolCallResult
      */
     public static ToolCallResult resource(String uri, String mimeType, String text)
     {
+        return resource(uri, mimeType, text, null);
+    }
+
+    /**
+     * Creates a resource content result with optional structuredContent.
+     */
+    public static ToolCallResult resource(String uri, String mimeType, String text, Object structuredContent)
+    {
         ToolCallResult result = new ToolCallResult();
         result.content.add(ContentItem.resource(uri, mimeType, text, null));
+        result.structuredContent = structuredContent;
         return result;
     }
     

@@ -13,6 +13,9 @@ and capability hints to clients before tool execution.
   selection
 - **AND** the vocabulary covers at minimum metadata reads, module reads, mutation/refactor flows,
   and runtime/application flows
+- **AND** the discovery contract exposes per-project capability hints through deterministic
+  machine-readable records rather than requiring clients to parse prose-only markdown
+- **AND** markdown-oriented discovery clients remain compatible through an additive response shape
 
 ### Requirement: Extension Metadata And Module Read Support
 
@@ -25,6 +28,8 @@ projects when EDT exposes a compatible model.
   valid extension project
 - **THEN** the server resolves the request through shared project context
 - **AND** the tool returns extension-scoped data or a precise model-limitation error
+- **AND** model-limitation failures distinguish "extension model unavailable" from "tool not in the
+  verified extension matrix"
 
 #### Scenario: Client invokes a read-only tool outside the verified extension matrix
 
@@ -33,6 +38,8 @@ projects when EDT exposes a compatible model.
 - **THEN** the server returns an actionable unsupported-operation or model-limitation error
 - **AND** the server does not silently fall back to configuration-project semantics for a different
   project kind
+- **AND** the response exposes a stable failure category that clients can distinguish from a
+  transport error
 
 ### Requirement: Guarded Extension Write And Refactor Flows
 
@@ -45,6 +52,7 @@ projects and SHALL fail safely when the requested operation is not verified for 
   support
 - **THEN** the server returns an actionable unsupported-operation error
 - **AND** the failure does not silently mutate unrelated configuration objects
+- **AND** the response exposes a stable failure category distinct from generic execution failure
 
 ### Requirement: Configuration-Only Runtime Tools Reject Extension Projects
 
@@ -58,6 +66,7 @@ extension lifecycle surface is approved.
 - **THEN** the server returns a clear error explaining that runtime/application flows are
   configuration-only
 - **AND** the response does not attempt infobase actions for the extension project
+- **AND** the response exposes a stable configuration-only failure category
 
 #### Scenario: Client invokes configuration-properties flow on an extension project
 
@@ -65,3 +74,4 @@ extension lifecycle surface is approved.
 - **THEN** the server returns a clear error explaining that extension-specific property semantics
   are not part of the configuration-properties contract yet
 - **AND** the response does not silently return properties for a different configuration project
+- **AND** the response exposes a stable configuration-only failure category

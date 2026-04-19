@@ -33,7 +33,10 @@ import com.ditrix.edt.mcp.server.tasks.TaskSchedulingKey;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.BlockingOperationDiagnostics;
 import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
+import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 import com.e1c.g5.dt.applications.ApplicationException;
 import com.e1c.g5.dt.applications.IApplication;
 import com.e1c.g5.dt.applications.IApplicationManager;
@@ -116,6 +119,14 @@ public class UpdateDatabaseTool implements IMcpTool
         if (applicationId == null || applicationId.isEmpty())
         {
             return ToolResult.error("applicationId is required. Use get_applications to get application list.").toJson(); //$NON-NLS-1$
+        }
+
+        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
+        if (context != null && context.isExtensionProject())
+        {
+            return ProjectCapabilityFailure.configurationOnly(NAME, context,
+                    "Database synchronization remains configuration-only in this rollout.") //$NON-NLS-1$
+                    .toJson();
         }
         
         // Check if project is ready for operations

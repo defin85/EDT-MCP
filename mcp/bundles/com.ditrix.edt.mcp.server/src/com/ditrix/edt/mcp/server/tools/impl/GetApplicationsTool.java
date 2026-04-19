@@ -19,7 +19,10 @@ import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
+import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
+import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
+import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 import com._1c.g5.v8.dt.platform.services.core.infobases.sync.IInfobaseSynchronizationManager;
 import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseEqualityState;
 import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseSynchronizationState;
@@ -75,6 +78,14 @@ public class GetApplicationsTool implements IMcpTool
         if (projectName == null || projectName.isEmpty())
         {
             return ToolResult.error("projectName is required").toJson(); //$NON-NLS-1$
+        }
+
+        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
+        if (context != null && context.isExtensionProject())
+        {
+            return ProjectCapabilityFailure.configurationOnly(NAME, context,
+                    "Runtime/application flows do not apply to extension projects.") //$NON-NLS-1$
+                    .toJson();
         }
         
         // Check if project is ready for operations
