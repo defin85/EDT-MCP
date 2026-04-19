@@ -36,7 +36,7 @@ public class DetachedContinuationMetaTest
         JsonObject continuation = meta.getAsJsonObject(McpConstants.META_DETACHED_CONTINUATION);
         assertEquals("task-1", continuation.get("operationId").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
         assertTrue(continuation.get("detached").getAsBoolean()); //$NON-NLS-1$
-        assertEquals("get_active_operation", continuation.get("pollTool").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertEquals("get_operation_snapshot", continuation.get("pollTool").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
     }
 
     @Test

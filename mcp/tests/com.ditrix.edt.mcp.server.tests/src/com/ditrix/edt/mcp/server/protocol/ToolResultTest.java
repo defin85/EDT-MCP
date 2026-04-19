@@ -105,6 +105,22 @@ public class ToolResultTest
     }
 
     @Test
+    public void testPutMeta()
+    {
+        String json = ToolResult.success()
+            .put("message", "blocked")
+            .putMeta("io.ditrix.edt.mcp/example", java.util.Map.of("reasonCode", "busy"))
+            .toJson();
+
+        JsonElement element = JsonParser.parseString(json);
+        assertTrue(element.getAsJsonObject().has("_meta")); //$NON-NLS-1$
+        assertEquals("busy", element.getAsJsonObject()
+            .getAsJsonObject("_meta") //$NON-NLS-1$
+            .getAsJsonObject("io.ditrix.edt.mcp/example") //$NON-NLS-1$
+            .get("reasonCode").getAsString()); //$NON-NLS-1$
+    }
+
+    @Test
     public void testToJsonStatic()
     {
         String json = ToolResult.toJsonStatic(List.of(1, 2, 3));

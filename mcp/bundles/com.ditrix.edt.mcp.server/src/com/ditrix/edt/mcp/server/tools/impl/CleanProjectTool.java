@@ -108,10 +108,10 @@ public class CleanProjectTool implements IMcpTool
         // Check if project is ready for operations
         if (projectName != null && !projectName.isEmpty())
         {
-            String notReadyError = ProjectStateChecker.checkReadyOrError(projectName);
-            if (notReadyError != null)
+            ToolResult notReadyResult = ProjectStateChecker.checkReadyOrErrorResult(projectName);
+            if (notReadyResult != null)
             {
-                return ToolResult.error(notReadyError).toJson();
+                return notReadyResult.toJson();
             }
         }
         
@@ -183,6 +183,7 @@ public class CleanProjectTool implements IMcpTool
                     }
                 }
             }
+            reporter.updateDetails(buildOperationDetails(projectNamesList));
 
             if (isCancellationRequested(cancellationToken, monitor))
             {
@@ -364,7 +365,7 @@ public class CleanProjectTool implements IMcpTool
             sb.append(" during clean/revalidation of "); //$NON-NLS-1$
             sb.append(String.join(", ", projectNames)); //$NON-NLS-1$
         }
-        sb.append(". EDT work may still continue in background; poll get_active_operation for detached status."); //$NON-NLS-1$
+        sb.append(". EDT work may still continue in background; use get_operation_snapshot when an operationId hint is available, or get_active_operation as focused fallback."); //$NON-NLS-1$
         return sb.toString();
     }
 
@@ -374,8 +375,29 @@ public class CleanProjectTool implements IMcpTool
         String target = hasText(projectName) ? projectName : "all EDT projects"; //$NON-NLS-1$
         reporter.start(context != null ? context.getOperationId() : null, NAME, STAGE_VALIDATION,
                 "Preparing clean build for " + target, context != null ? context.getRequestId() : null, //$NON-NLS-1$
-                context != null ? context.getSessionId() : null, context != null ? context.getProgressToken() : null);
+                context != null ? context.getSessionId() : null, context != null ? context.getProgressToken() : null,
+                buildOperationDetails(hasText(projectName) ? List.of(projectName) : List.of()));
         return reporter;
+    }
+
+    private Map<String, Object> buildOperationDetails(List<String> projectNames)
+    {
+        if (projectNames == null || projectNames.isEmpty())
+        {
+            return Map.of();
+        }
+
+        if (projectNames.size() == 1)
+        {
+            return Map.of("projectName", projectNames.get(0)); //$NON-NLS-1$
+        }
+
+        List<Map<String, Object>> projects = new ArrayList<>();
+        for (String name : projectNames)
+        {
+            projects.add(Map.of("projectName", name)); //$NON-NLS-1$
+        }
+        return Map.of("projects", projects); //$NON-NLS-1$
     }
 
     private void registerActiveOperation(McpServer server, OperationProgressReporter reporter, ToolExecutionContext context)

@@ -3,8 +3,8 @@
 
 Этот файл генерируется из `tools/impl/*Tool.java` и служит fast reference для Codex.
 
-- Tool implementations found: `35`
-- Tool names documented in `README.md`: `35`
+- Tool implementations found: `36`
+- Tool names documented in `README.md`: `36`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
 ## Tool Map
@@ -25,10 +25,11 @@
 | `get_edt_version` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetEdtVersionTool.java` | `-` | `read/discovery` | - |
 | `get_form_screenshot` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetFormScreenshotTool.java` | `-` | `read/discovery` | - |
 | `get_metadata_details` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetMetadataDetailsTool.java` | `-` | `read/discovery` | - |
-| `get_metadata_objects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetMetadataObjectsTool.java` | `-` | `read/discovery` | - |
+| `get_metadata_objects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetMetadataObjectsTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetMetadataObjectsToolTest.java` | `read/discovery` | - |
 | `get_method_call_hierarchy` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetMethodCallHierarchyTool.java` | `-` | `read/discovery` | - |
 | `get_module_structure` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetModuleStructureTool.java` | `-` | `read/discovery` | - |
 | `get_objects_by_tags` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetObjectsByTagsTool.java` | `-` | `read/discovery` | - |
+| `get_operation_snapshot` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetOperationSnapshotTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetOperationSnapshotToolTest.java` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `get_platform_documentation` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetPlatformDocumentationTool.java` | `-` | `read/discovery` | - |
 | `get_problem_summary` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetProblemSummaryTool.java` | `-` | `read/discovery` | - |
 | `get_project_errors` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetProjectErrorsTool.java` | `-` | `read/discovery` | - |

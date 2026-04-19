@@ -56,6 +56,12 @@ public class OperationProgressReporter
     public synchronized OperationProgressState start(String operationId, String toolName, String stage, String message,
             String requestId, String sessionId, Object progressToken)
     {
+        return start(operationId, toolName, stage, message, requestId, sessionId, progressToken, Map.of());
+    }
+
+    public synchronized OperationProgressState start(String operationId, String toolName, String stage, String message,
+            String requestId, String sessionId, Object progressToken, Map<String, Object> details)
+    {
         recentEvents.clear();
         this.operationId = hasText(operationId) ? operationId : UUID.randomUUID().toString();
         this.toolName = toolName;
@@ -71,7 +77,7 @@ public class OperationProgressReporter
         this.sessionId = sessionId;
         this.progressToken = progressToken;
         this.detached = false;
-        this.details = Map.of();
+        this.details = sanitizeDetails(details);
         addEvent(lastUpdateAt, stage, message, null, null);
         return publishSnapshot(snapshot());
     }
@@ -188,6 +194,13 @@ public class OperationProgressReporter
         this.details = sanitizeDetails(details);
         this.lastUpdateAt = Instant.now();
         addEvent(lastUpdateAt, stage, message, null, null);
+        return publishSnapshot(snapshot());
+    }
+
+    public synchronized OperationProgressState updateDetails(Map<String, Object> details)
+    {
+        this.details = sanitizeDetails(details);
+        this.lastUpdateAt = Instant.now();
         return publishSnapshot(snapshot());
     }
 

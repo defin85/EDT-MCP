@@ -103,10 +103,10 @@ public class DebugLaunchTool implements IMcpTool
         }
         
         // Check if project is ready for operations
-        String notReadyError = ProjectStateChecker.checkReadyOrError(projectName);
-        if (notReadyError != null)
+        ToolResult notReadyResult = ProjectStateChecker.checkReadyOrErrorResult(projectName);
+        if (notReadyResult != null)
         {
-            return ToolResult.error(notReadyError).toJson();
+            return notReadyResult.toJson();
         }
         
         return launchDebug(projectName, applicationId, updateBeforeLaunch);

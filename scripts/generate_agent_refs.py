@@ -16,6 +16,7 @@ LONG_RUNNING_TOOLS = {
     "clean_project",
     "debug_launch",
     "get_active_operation",
+    "get_operation_snapshot",
     "revalidate_objects",
     "update_database",
 }

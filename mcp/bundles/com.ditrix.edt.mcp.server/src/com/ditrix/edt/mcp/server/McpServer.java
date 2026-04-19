@@ -13,6 +13,8 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -46,6 +48,7 @@ import com.ditrix.edt.mcp.server.tools.impl.GetContentAssistTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetEdtVersionTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetFormScreenshotTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetActiveOperationTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetOperationSnapshotTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetMetadataDetailsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetSymbolInfoTool;
 import com.ditrix.edt.mcp.server.tools.impl.GoToDefinitionTool;
@@ -254,6 +257,7 @@ public class McpServer
         // Application tools
         registry.register(new GetApplicationsTool());
         registry.register(new UpdateDatabaseTool());
+        registry.register(new GetOperationSnapshotTool());
         registry.register(new GetActiveOperationTool());
         registry.register(new DebugLaunchTool());
 
@@ -523,6 +527,25 @@ public class McpServer
         }
         OperationProgressReporter reporter = activeOperationReporters.get(operationId);
         return reporter != null ? reporter.snapshot() : null;
+    }
+
+    /**
+     * Returns snapshots for all currently tracked operations.
+     *
+     * @return immutable list of non-null snapshots
+     */
+    public List<OperationProgressState> getTrackedOperationSnapshots()
+    {
+        List<OperationProgressState> snapshots = new ArrayList<>();
+        for (OperationProgressReporter reporter : activeOperationReporters.values())
+        {
+            OperationProgressState snapshot = reporter != null ? reporter.snapshot() : null;
+            if (snapshot != null)
+            {
+                snapshots.add(snapshot);
+            }
+        }
+        return List.copyOf(snapshots);
     }
 
     /**

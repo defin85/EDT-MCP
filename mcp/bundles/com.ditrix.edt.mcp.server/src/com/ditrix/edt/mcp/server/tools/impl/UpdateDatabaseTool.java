@@ -31,6 +31,7 @@ import com.ditrix.edt.mcp.server.progress.ToolExecutionContextHolder;
 import com.ditrix.edt.mcp.server.tasks.TaskCancellationToken;
 import com.ditrix.edt.mcp.server.tasks.TaskSchedulingKey;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.utils.BlockingOperationDiagnostics;
 import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
 import com.e1c.g5.dt.applications.ApplicationException;
@@ -118,10 +119,10 @@ public class UpdateDatabaseTool implements IMcpTool
         }
         
         // Check if project is ready for operations
-        String notReadyError = ProjectStateChecker.checkReadyOrError(projectName);
-        if (notReadyError != null)
+        ToolResult notReadyResult = ProjectStateChecker.checkReadyOrErrorResult(projectName);
+        if (notReadyResult != null)
         {
-            return ToolResult.error(notReadyError).toJson();
+            return notReadyResult.toJson();
         }
         
         return updateDatabase(projectName, applicationId, fullUpdate, autoRestructure);
@@ -141,7 +142,8 @@ public class UpdateDatabaseTool implements IMcpTool
     {
         McpServer server = Activator.getDefault() != null ? Activator.getDefault().getMcpServer() : null;
         ToolExecutionContext context = ToolExecutionContextHolder.get();
-        OperationProgressReporter reporter = createProgressReporter(context, fullUpdate, autoRestructure);
+        OperationProgressReporter reporter = createProgressReporter(context, projectName, applicationId, fullUpdate,
+                autoRestructure);
         CapturingProgressMonitor monitor = new CapturingProgressMonitor(reporter);
         TaskCancellationToken cancellationToken = context != null ? context.getCancellationToken() : null;
         IProject project = null;
@@ -200,6 +202,7 @@ public class UpdateDatabaseTool implements IMcpTool
             
             IApplication application = appOpt.get();
             applicationName = application.getName();
+            reporter.updateDetails(buildOperationDetails(projectName, applicationId, applicationName));
 
             infobaseApplication = InfobaseSyncUtils.asInfobaseApplication(application);
             if (infobaseApplication == null)
@@ -220,7 +223,7 @@ public class UpdateDatabaseTool implements IMcpTool
                     equalityStateBefore);
             if ("BEING_UPDATED".equals(updateStateBefore)) //$NON-NLS-1$
             {
-                return fail(reporter, "Application is currently being synchronized. Please wait."); //$NON-NLS-1$
+                return applicationSyncBusy(server, reporter, projectName, applicationId, applicationName);
             }
             String invalidModeMessage = InfobaseSyncUtils.validateRequestedUpdateMode(fullUpdate, updateStateBefore);
             if (invalidModeMessage != null)
@@ -334,16 +337,26 @@ public class UpdateDatabaseTool implements IMcpTool
         }
     }
 
-    private OperationProgressReporter createProgressReporter(ToolExecutionContext context, boolean fullUpdate,
-            boolean autoRestructure)
+    private OperationProgressReporter createProgressReporter(ToolExecutionContext context, String projectName,
+            String applicationId, boolean fullUpdate, boolean autoRestructure)
     {
         OperationProgressReporter reporter = new OperationProgressReporter();
         String updateType = fullUpdate ? "full" : "incremental"; //$NON-NLS-1$ //$NON-NLS-2$
         reporter.start(context != null ? context.getOperationId() : null, NAME, STAGE_VALIDATION,
                 "Preparing " + updateType + " database update; autoRestructure=" + autoRestructure, //$NON-NLS-1$ //$NON-NLS-2$
                 context != null ? context.getRequestId() : null, context != null ? context.getSessionId() : null,
-                context != null ? context.getProgressToken() : null);
+                context != null ? context.getProgressToken() : null,
+                buildOperationDetails(projectName, applicationId, null));
         return reporter;
+    }
+
+    private Map<String, Object> buildOperationDetails(String projectName, String applicationId, String applicationName)
+    {
+        if (applicationName == null || applicationName.isBlank())
+        {
+            return Map.of("projectName", projectName, "applicationId", applicationId); //$NON-NLS-1$ //$NON-NLS-2$
+        }
+        return Map.of("projectName", projectName, "applicationId", applicationId, "applicationName", applicationName); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
     }
 
     private void registerActiveOperation(McpServer server, OperationProgressReporter reporter)
@@ -372,6 +385,16 @@ public class UpdateDatabaseTool implements IMcpTool
         reporter.stage(STAGE_FAILURE, message);
         reporter.failed(message, null);
         return ToolResult.error(message).toJson();
+    }
+
+    private String applicationSyncBusy(McpServer server, OperationProgressReporter reporter, String projectName,
+            String applicationId, String applicationName)
+    {
+        String message = "Application synchronization is already in progress. Please wait and retry."; //$NON-NLS-1$
+        reporter.stage(STAGE_FAILURE, message);
+        reporter.failed(message, null);
+        return BlockingOperationDiagnostics.applicationSyncBlocked(server, projectName, applicationId, applicationName,
+                message).toJson();
     }
 
     private boolean isCancellationRequested(TaskCancellationToken cancellationToken, CapturingProgressMonitor monitor)

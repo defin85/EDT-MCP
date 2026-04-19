@@ -82,10 +82,10 @@ public class GetProjectErrorsTool implements IMcpTool
         // Check if project is ready for operations
         if (projectName != null && !projectName.isEmpty())
         {
-            String notReadyError = ProjectStateChecker.checkReadyOrError(projectName);
-            if (notReadyError != null)
+            ToolResult notReadyResult = ProjectStateChecker.checkReadyOrErrorResult(projectName);
+            if (notReadyResult != null)
             {
-                return ToolResult.error(notReadyError).toJson();
+                return notReadyResult.toJson();
             }
         }
         

@@ -103,6 +103,9 @@ public final class McpConstants
 
     /** Detached continuation metadata key */
     public static final String META_DETACHED_CONTINUATION = "io.ditrix.edt.mcp/detached-continuation"; //$NON-NLS-1$
+
+    /** Blocking operation metadata key */
+    public static final String META_BLOCKING_OPERATION = "io.ditrix.edt.mcp/blocking-operation"; //$NON-NLS-1$
     
     private McpConstants()
     {

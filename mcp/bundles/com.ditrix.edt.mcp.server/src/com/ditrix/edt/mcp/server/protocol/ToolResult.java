@@ -7,6 +7,7 @@
 package com.ditrix.edt.mcp.server.protocol;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -96,6 +97,19 @@ public class ToolResult
     public ToolResult put(String key, Object value)
     {
         data.put(key, value);
+        return this;
+    }
+
+    /**
+     * Adds a top-level MCP metadata entry. The protocol handler lifts this map from
+     * structured JSON into the MCP payload `_meta`.
+     */
+    @SuppressWarnings("unchecked")
+    public ToolResult putMeta(String key, Object value)
+    {
+        Map<String, Object> meta = (Map<String, Object>) data.computeIfAbsent("_meta",
+                unused -> new LinkedHashMap<String, Object>()); //$NON-NLS-1$
+        meta.put(key, value);
         return this;
     }
     

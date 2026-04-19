@@ -603,7 +603,19 @@ public class McpProtocolHandler
     private JsonElement buildToolCallJsonPayload(String jsonResult)
     {
         JsonElement structured = JsonParser.parseString(jsonResult);
-        return GsonProvider.get().toJsonTree(ToolCallResult.json(structured));
+        JsonObject embeddedMeta = extractEmbeddedMeta(structured);
+        JsonObject payload = GsonProvider.get().toJsonTree(ToolCallResult.json(structured)).getAsJsonObject();
+        if (embeddedMeta != null && !embeddedMeta.entrySet().isEmpty())
+        {
+            JsonObject meta = payload.has("_meta") && payload.get("_meta").isJsonObject() //$NON-NLS-1$
+                    ? payload.getAsJsonObject("_meta") : new JsonObject(); //$NON-NLS-1$
+            for (Map.Entry<String, JsonElement> entry : embeddedMeta.entrySet())
+            {
+                meta.add(entry.getKey(), entry.getValue());
+            }
+            payload.add("_meta", meta); //$NON-NLS-1$
+        }
+        return payload;
     }
 
     private JsonElement buildToolCallResourcePayload(String content, String mimeType, String fileName)
@@ -856,6 +868,24 @@ public class McpProtocolHandler
     private static boolean hasText(String value)
     {
         return value != null && !value.isBlank();
+    }
+
+    private JsonObject extractEmbeddedMeta(JsonElement structured)
+    {
+        if (structured == null || !structured.isJsonObject())
+        {
+            return null;
+        }
+
+        JsonObject structuredObject = structured.getAsJsonObject();
+        if (!structuredObject.has("_meta") || !structuredObject.get("_meta").isJsonObject()) //$NON-NLS-1$ //$NON-NLS-2$
+        {
+            return null;
+        }
+
+        JsonObject embeddedMeta = structuredObject.getAsJsonObject("_meta").deepCopy(); //$NON-NLS-1$
+        structuredObject.remove("_meta"); //$NON-NLS-1$
+        return embeddedMeta;
     }
 
     /**

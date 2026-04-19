@@ -432,6 +432,57 @@ public class McpProtocolHandlerTest
     }
 
     @Test
+    public void testToolCallJsonPayloadLiftsStructuredMetaToTopLevelMeta() throws Exception
+    {
+        registry.register(new IMcpTool()
+        {
+            @Override
+            public String getName()
+            {
+                return "meta_tool"; //$NON-NLS-1$
+            }
+
+            @Override
+            public String getDescription()
+            {
+                return "Meta tool"; //$NON-NLS-1$
+            }
+
+            @Override
+            public String getInputSchema()
+            {
+                return "{\"type\":\"object\"}"; //$NON-NLS-1$
+            }
+
+            @Override
+            public String execute(Map<String, String> params)
+            {
+                return ToolResult.success()
+                        .put("message", "blocked") //$NON-NLS-1$ //$NON-NLS-2$
+                        .putMeta("io.ditrix.edt.mcp/example", Map.of("reasonCode", "busy")) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                        .toJson();
+            }
+
+            @Override
+            public ResponseType getResponseType()
+            {
+                return ResponseType.JSON;
+            }
+        });
+        installTestActivator(new McpServer());
+
+        String response = handler.processRequest(buildToolCallRequest(1, "meta_tool", "{}")); //$NON-NLS-1$ //$NON-NLS-2$
+
+        JsonObject json = parseResponse(response);
+        JsonObject result = json.getAsJsonObject("result"); //$NON-NLS-1$
+        assertTrue(result.has("_meta")); //$NON-NLS-1$
+        assertEquals("busy", result.getAsJsonObject("_meta") //$NON-NLS-1$
+                .getAsJsonObject("io.ditrix.edt.mcp/example") //$NON-NLS-1$
+                .get("reasonCode").getAsString()); //$NON-NLS-1$
+        assertFalse(result.getAsJsonObject("structuredContent").has("_meta")); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    @Test
     public void testAttachTaskResultMetaAddsDetachedContinuationWhenSnapshotExists()
     {
         McpServer server = new McpServer();
@@ -453,6 +504,8 @@ public class McpProtocolHandlerTest
         assertTrue(meta.has(McpConstants.META_DETACHED_CONTINUATION));
         assertEquals("task-1", meta.getAsJsonObject(McpConstants.META_DETACHED_CONTINUATION) //$NON-NLS-1$
                 .get("operationId").getAsString()); //$NON-NLS-1$
+        assertEquals("get_operation_snapshot", meta.getAsJsonObject(McpConstants.META_DETACHED_CONTINUATION) //$NON-NLS-1$
+                .get("pollTool").getAsString()); //$NON-NLS-1$
     }
 
     // === Helpers ===
@@ -590,13 +643,20 @@ public class McpProtocolHandlerTest
         private final String description;
         private final String inputSchema;
         private final TaskSupport taskSupport;
+        private final String executeResult;
 
         StubTool(String name, String description, String inputSchema, TaskSupport taskSupport)
+        {
+            this(name, description, inputSchema, taskSupport, "{}"); //$NON-NLS-1$
+        }
+
+        StubTool(String name, String description, String inputSchema, TaskSupport taskSupport, String executeResult)
         {
             this.name = name;
             this.description = description;
             this.inputSchema = inputSchema;
             this.taskSupport = taskSupport;
+            this.executeResult = executeResult;
         }
 
         @Override
@@ -612,6 +672,6 @@ public class McpProtocolHandlerTest
         public TaskSupport getTaskSupport() { return taskSupport; }
 
         @Override
-        public String execute(Map<String, String> params) { return "{}"; }
+        public String execute(Map<String, String> params) { return executeResult; }
     }
 }

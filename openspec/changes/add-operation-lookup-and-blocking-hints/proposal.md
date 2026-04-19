@@ -18,6 +18,8 @@ derived-data continuation.
 ## What Changes
 
 - Добавить public lookup surface для конкретной tracked operation по стабильному `operationId`.
+- Перенаправить machine-readable hints, которые уже несут stable `operationId`, на exact polling
+  через `get_operation_snapshot`, а не обратно на focused fallback.
 - Добавить machine-readable blocking hint для project/application busy состояний, когда server может
   связать отказ с известной tracked operation.
 - Нормализовать human-readable blocked diagnostics, чтобы они не опирались на сырые `toString()`

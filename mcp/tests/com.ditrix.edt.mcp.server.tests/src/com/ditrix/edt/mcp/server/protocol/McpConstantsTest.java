@@ -60,4 +60,11 @@ public class McpConstantsTest
         assertEquals("MCP-Protocol-Version", McpConstants.HEADER_PROTOCOL_VERSION);
         assertEquals("MCP-Session-Id", McpConstants.HEADER_SESSION_ID);
     }
+
+    @Test
+    public void testMetadataKeys()
+    {
+        assertEquals("io.ditrix.edt.mcp/detached-continuation", McpConstants.META_DETACHED_CONTINUATION); //$NON-NLS-1$
+        assertEquals("io.ditrix.edt.mcp/blocking-operation", McpConstants.META_BLOCKING_OPERATION); //$NON-NLS-1$
+    }
 }

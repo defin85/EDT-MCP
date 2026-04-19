@@ -49,12 +49,43 @@ lookup и actionable blocker diagnostics.
   - Rationale: runtime already tracks snapshots by `operationId`; proposal only exposes this truth
     outside in a controlled MCP contract.
 
+- Decision: `get_operation_snapshot` возвращает тот же snapshot field set, что и
+  `get_active_operation`, но использует `found` как state discriminator для exact lookup; miss не
+  является transport-level error.
+  - Alternatives considered:
+    - переиспользовать `active` как единственный discriminator
+    - возвращать not-found через JSON-RPC error
+    - добавлять ещё и `focused`
+  - Rationale: отсутствие snapshot по `operationId` — это обычный lifecycle/TTL outcome, а не
+    exceptional protocol failure. `found` лучше выражает exact-lookup semantics, чем `active`, и не
+    тащит focused-проекцию в новый contract.
+
+- Decision: любые machine-readable hints, которые уже содержат stable `operationId`, должны
+  указывать `get_operation_snapshot` как preferred exact poll surface; `get_active_operation`
+  сохраняется как focused fallback, когда `operationId` неизвестен.
+  - Alternatives considered:
+    - оставить старый `pollTool: "get_active_operation"` даже когда `operationId` уже известен
+    - убрать `pollTool` совсем и полагаться на документацию
+  - Rationale: если клиент уже знает `operationId`, направлять его обратно в focused projection —
+    лишняя двусмысленность и потеря точности. Exact lookup должен быть machine-discoverable там, где
+    server уже может назвать exact identity.
+
 - Decision: добавлять blocking hint в `_meta["io.ditrix.edt.mcp/blocking-operation"]`.
   - Alternatives considered:
     - класть всё только в `content.text`
     - использовать JSON-RPC error data вместо additive payload metadata
   - Rationale: additive `_meta` лучше согласуется с уже существующим detached continuation hint и
     не заставляет менять transport-level error semantics.
+
+- Decision: blocking hint должен включать `scope` и известные identifiers (`projectName`,
+  `applicationId` / `applicationName`, когда blocker относится к infobase), а `pollTool` допустим
+  только вместе с надёжно определённым `operationId`.
+  - Alternatives considered:
+    - ограничиться только `reasonCode`
+    - всегда отдавать `pollTool`, даже без однозначной operation correlation
+  - Rationale: одного `reasonCode` недостаточно для уверенной retry/orientation logic в
+    multi-project runtime. Идентификаторы области делают hint пригодным для автоматизации, а
+    `pollTool` без точного `operationId` создаёт ложную уверенность.
 
 - Decision: нормализовать blocker reason codes и human-readable messages отдельно от EDT raw
   `toString()`.
@@ -90,7 +121,5 @@ lookup и actionable blocker diagnostics.
 
 ## Open Questions
 
-- Должен ли `get_operation_snapshot` возвращать тот же payload shape, что и `get_active_operation`,
-  или стоит сразу добавить extra field вроде `focused` / `found`?
-- Нужен ли в blocking hint отдельный `scope` (`project`, `application`) или достаточно
-  `reasonCode` + известных identifiers?
+- Неразрешённых architecture-level вопросов для этого rollout больше нет; дальнейшие различия
+  относятся к implementation detail и naming внутри bounded additive contract.

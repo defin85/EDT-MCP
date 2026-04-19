@@ -19,7 +19,7 @@ MCP (Model Context Protocol) server plugin for 1C:EDT, enabling AI assistants (C
 - 🚀 **Application Management** - Get applications, update database, launch in debug mode
 - 🎯 **Status Bar** - Real-time server status with stage-aware progress, elapsed time, and interactive controls
 - ⚡ **Interruptible Operations** - Cancel long-running operations and send signals to AI agent
-- 📡 **Progress Reporting** - `update_database` can publish MCP `notifications/progress` and exposes `get_active_operation` as polling fallback
+- 📡 **Progress Reporting** - `update_database` can publish MCP `notifications/progress`, with `get_operation_snapshot` for exact polling and `get_active_operation` as focused fallback
 - 🏷️ **Metadata Tags** - Organize objects with custom tags, filter Navigator, keyboard shortcuts (Ctrl+Alt+1-0), multiselect support
 - 📁 **Metadata Groups** - Create custom folder hierarchy in Navigator tree per metadata collection
 - ✏️ **Metadata Refactoring** - Rename/delete metadata objects with full cascading updates across BSL code, forms and metadata; add new attributes to existing objects
@@ -159,11 +159,12 @@ progress model to both EDT UI and MCP clients.
 
 - The status bar keeps showing the active EDT operation even after **Continue in Background** interrupted the HTTP call.
 - MCP `notifications/progress` are sent only when the client provided `_meta.progressToken` in the original `tools/call` request and has an SSE stream attached to the same `MCP-Session-Id`.
-- When EDT work survives the original task/call lifetime, `get_active_operation` stays non-idle and returns a detached snapshot with `detached: true`, the same `operationId`, and structured `details`.
-- Detached continuation relies on `get_active_operation` and the EDT status bar; the original `progressToken` is not kept alive after the MCP task/call becomes terminal.
+- When EDT work survives the original task/call lifetime, `get_operation_snapshot` can return the detached snapshot for the stable `operationId`, while `get_active_operation` remains the focused fallback projection with `detached: true` and structured `details`.
+- Detached continuation relies on `get_operation_snapshot` plus the EDT status bar; the original `progressToken` is not kept alive after the MCP task/call becomes terminal.
 - For `update_database`, `clean_project`, and full-project `revalidate_objects`, a bare call now returns task creation metadata; the final payload is retrieved later through `tasks/result` in the same MCP session.
 - Sync-only tools still return the normal final tool result directly when clients ignore progress notifications.
-- `get_active_operation` can be used as a polling fallback when a client does not support or does not consume `notifications/progress`.
+- `get_active_operation` can still be used as a polling fallback when a client does not support or does not consume `notifications/progress`.
+- Busy project/application rejections now include `_meta["io.ditrix.edt.mcp/blocking-operation"]` with stable reason codes, scope identifiers, and exact `operationId` hints when correlation is unambiguous.
 
 Minimal request requirements for progress notifications:
 
@@ -209,8 +210,9 @@ The server now exposes experimental MCP Tasks support for long-running tool exec
 - `revalidate_objects` keeps `execution.taskSupport: "optional"` and is async-first only for full-project revalidation; partial object revalidation stays synchronous and task-augmented partial requests are rejected with an actionable error
 - `tasks/get`, `tasks/list`, `tasks/result`, and `tasks/cancel` are available over the same `/mcp` endpoint
 - Follow-up `tasks/get`, `tasks/result`, and `tasks/cancel` calls must use the same `MCP-Session-Id` that created the task
-- The original `_meta.progressToken` stays valid for task-backed `update_database`, `clean_project`, and full-project `revalidate_objects` calls while the task is live; after a terminal MCP outcome, detached continuation moves to `get_active_operation`
-- When cancellation can leave EDT work running in background, terminal sync/task payloads include `_meta["io.ditrix.edt.mcp/detached-continuation"]` with the stable `operationId` and `pollTool: "get_active_operation"`
+- The original `_meta.progressToken` stays valid for task-backed `update_database`, `clean_project`, and full-project `revalidate_objects` calls while the task is live; after a terminal MCP outcome, detached continuation moves to `get_operation_snapshot` for exact polling by `operationId`
+- When cancellation can leave EDT work running in background, terminal sync/task payloads include `_meta["io.ditrix.edt.mcp/detached-continuation"]` with the stable `operationId` and `pollTool: "get_operation_snapshot"`
+- Busy project/application rejections may include `_meta["io.ditrix.edt.mcp/blocking-operation"]` with `reasonCode`, `scope`, `projectName`, known application identifiers, and exact polling hints when the blocker maps to a single tracked operation
 - Conflicting mutable task-backed operations are rejected explicitly instead of running in unsafe parallel
 - Heavy read-only diagnostics such as `get_problem_summary` and `get_project_errors` remain synchronous in this rollout; use summary/filter/limit shaping instead of task augmentation
 - `get_active_operation` remains available as a compatibility fallback for clients that do not consume Tasks yet
@@ -363,6 +365,7 @@ Add to `claude_desktop_config.json`:
 | `get_objects_by_tags` | Get metadata objects filtered by tags with tag descriptions and object FQNs |
 | `get_applications` | Get list of applications (infobases) for a project with update state |
 | `update_database` | Update database (infobase) with full or incremental update mode; async-first at runtime and still supports explicit task augmentation |
+| `get_operation_snapshot` | Get the progress snapshot for a specific tracked long-running operation by `operationId` |
 | `get_active_operation` | Get the current long-running operation progress snapshot for polling fallback |
 | `debug_launch` | Launch application in debug mode (auto-updates database before launch) |
 | `get_form_screenshot` | Capture PNG screenshot of form WYSIWYG editor (embedded image resource) |
@@ -645,9 +648,23 @@ Typical stages:
 - `final_state_check`
 - `completion` / `failure`
 
+**`get_operation_snapshot`** - Return a JSON snapshot for a specific tracked long-running EDT operation by stable `operationId`. Useful after detached-continuation or blocking-operation hints already provided the exact operation identity.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `operationId` | Yes | Stable operation ID from progress/task metadata |
+
+**Returns:**
+- `found` - whether the requested operation is still tracked
+- `operationId`, `toolName`, `status`, `detached`, `stage`, `message`
+- `progress`, `total`, `indeterminate`
+- `elapsedSeconds`, `startedAt`
+- `details`, `recentEvents`
+
 #### Get Active Operation Tool
 
-**`get_active_operation`** - Return a JSON snapshot of the currently active long-running EDT operation, if any. Useful as a polling fallback for clients that do not use `notifications/progress`.
+**`get_active_operation`** - Return a JSON snapshot of the currently focused long-running EDT operation, if any. Useful as a polling fallback when the client does not yet know an `operationId`.
 
 **Parameters:** none
 

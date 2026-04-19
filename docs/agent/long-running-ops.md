@@ -5,6 +5,7 @@
 ## Scope
 
 - `update_database`
+- `get_operation_snapshot`
 - `get_active_operation`
 - `clean_project`
 - `revalidate_objects`
@@ -30,9 +31,10 @@
 - explicit task augmentation по-прежнему идёт через `tools/call` + `task`, а `execution.taskSupport` остаётся `optional`
 - финальный task-backed result читается через `tasks/result` в той же MCP session
 - terminal sync/task payload для supported operations может нести `_meta["io.ditrix.edt.mcp/detached-continuation"]`
+- busy-state rejection может нести `_meta["io.ditrix.edt.mcp/blocking-operation"]` с `reasonCode`, `scope` и exact poll hint при однозначной корреляции
 - конфликтующие mutable task-backed операции явно отклоняются, а не запускаются параллельно
 - тяжёлые diagnostics остаются sync-only и опираются на summary/filter/limit shaping вместо task lifecycle
-- `get_active_operation` остаётся polling fallback и теперь может возвращать detached snapshot с `detached: true`, stable `operationId` и structured `details`
+- `get_operation_snapshot` даёт exact polling по stable `operationId`, а `get_active_operation` остаётся focused polling fallback с `detached: true` и structured `details`
 - cleanup/discoverability для `debug_launch` вынесены в отдельный runtime-debug-control трек, а не в этот task rollout
 
 ## Code Entry Points
@@ -47,10 +49,12 @@
 - `.../progress/ToolExecutionContext.java`
 - `.../tasks/TaskRegistry.java`
 - `.../tools/impl/UpdateDatabaseTool.java`
+- `.../tools/impl/GetOperationSnapshotTool.java`
 - `.../tools/impl/GetActiveOperationTool.java`
 - `.../tools/impl/CleanProjectTool.java`
 - `.../tools/impl/RevalidateObjectsTool.java`
 - `.../tools/impl/DebugLaunchTool.java`
+- `.../utils/BlockingOperationDiagnostics.java`
 - `.../ui/McpStatusContribution.java`
 
 ## Runtime Flow
@@ -70,9 +74,9 @@
 3. Initial response returns `CreateTaskResult`
 4. Пока task live, progress может идти через исходный `progressToken`
 5. Final payload is retrieved through `tasks/result` in the same MCP session
-6. После terminal MCP outcome detached continuation, если она есть, переносится в `get_active_operation`
+6. После terminal MCP outcome detached continuation, если она есть, переносится в `get_operation_snapshot` для exact polling по `operationId`
 7. Terminal payload/task result может нести machine-readable continuation hint
-8. `get_active_operation` остаётся compatibility fallback
+8. `get_active_operation` остаётся compatibility fallback, когда `operationId` ещё неизвестен
 
 ## Evidence And Gaps
 

@@ -14,6 +14,7 @@ import com._1c.g5.v8.dt.core.platform.IDerivedDataManagerProvider;
 import com._1c.g5.v8.dt.core.platform.IDtProject;
 import com._1c.g5.v8.dt.core.platform.IDtProjectManager;
 import com.ditrix.edt.mcp.server.Activator;
+import com.ditrix.edt.mcp.server.protocol.ToolResult;
 
 /**
  * Utility class for checking project state and readiness.
@@ -173,19 +174,41 @@ public final class ProjectStateChecker
         if (!ddManager.isIdle())
         {
             DerivedDataStatus status = ddManager.getDerivedDataStatus();
-            String statusStr = status != null ? status.toString() : "computing";
-            return new ProjectStateResult(ProjectState.BUILDING, 
-                "Project is building: " + statusStr);
+            return new ProjectStateResult(ProjectState.BUILDING, buildDerivedDataBusyMessage(status));
         }
         
         // Check if all derived data is computed
         if (!ddManager.isAllComputed())
         {
             return new ProjectStateResult(ProjectState.BUILDING, 
-                "Project build in progress (derived data not complete)");
+                "Project build is in progress (derived data is still being prepared)");
         }
         
         return new ProjectStateResult(ProjectState.READY, "Project is ready");
+    }
+
+    /**
+     * Checks if a project is ready and returns a normalized tool result if it is blocked.
+     *
+     * @param project the IProject to check
+     * @return null if ready, otherwise ready-to-serialize tool result
+     */
+    public static ToolResult checkReadyOrErrorResult(IProject project)
+    {
+        ProjectStateResult result = checkProjectState(project);
+        if (result.isReady())
+        {
+            return null;
+        }
+
+        String message = result.getMessage() + ". Please wait and retry."; //$NON-NLS-1$
+        if (result.getState() == ProjectState.BUILDING && project != null && project.exists())
+        {
+            return BlockingOperationDiagnostics.projectBuildBlocked(
+                    Activator.getDefault() != null ? Activator.getDefault().getMcpServer() : null,
+                    project.getName(), message);
+        }
+        return ToolResult.error(message);
     }
     
     /**
@@ -203,6 +226,24 @@ public final class ProjectStateChecker
             return null;
         }
         return result.getMessage() + ". Please wait and retry.";
+    }
+
+    /**
+     * Checks if a project is ready and returns a normalized tool result if it is blocked.
+     *
+     * @param projectName the project name to check
+     * @return null if ready, otherwise ready-to-serialize tool result
+     */
+    public static ToolResult checkReadyOrErrorResult(String projectName)
+    {
+        if (projectName == null || projectName.isEmpty())
+        {
+            return null;
+        }
+
+        IProject project = org.eclipse.core.resources.ResourcesPlugin.getWorkspace()
+                .getRoot().getProject(projectName);
+        return checkReadyOrErrorResult(project);
     }
     
     /**
@@ -223,5 +264,24 @@ public final class ProjectStateChecker
             .getRoot().getProject(projectName);
         
         return checkReadyOrError(project);
+    }
+
+    private static String buildDerivedDataBusyMessage(DerivedDataStatus status)
+    {
+        String activeStage = status != null && status.getActiveStage() != null ? String.valueOf(status.getActiveStage())
+                : null;
+        if (activeStage != null && !activeStage.isBlank())
+        {
+            return "Project build is in progress (derived data stage: " + activeStage + ")"; //$NON-NLS-1$ //$NON-NLS-2$
+        }
+
+        String pipelineStatus = status != null && status.getPipelineStatus() != null
+                ? String.valueOf(status.getPipelineStatus()) : null;
+        if (pipelineStatus != null && !pipelineStatus.isBlank())
+        {
+            return "Project build is in progress (pipeline: " + pipelineStatus + ")"; //$NON-NLS-1$ //$NON-NLS-2$
+        }
+
+        return "Project build is in progress (derived data is still computing)"; //$NON-NLS-1$
     }
 }

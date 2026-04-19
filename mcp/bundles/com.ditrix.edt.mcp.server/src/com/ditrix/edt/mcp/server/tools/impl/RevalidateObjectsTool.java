@@ -139,10 +139,10 @@ public class RevalidateObjectsTool implements IMcpTool
         // Check if project is ready for operations
         if (projectName != null && !projectName.isEmpty())
         {
-            String notReadyError = ProjectStateChecker.checkReadyOrError(projectName);
-            if (notReadyError != null)
+            ToolResult notReadyResult = ProjectStateChecker.checkReadyOrErrorResult(projectName);
+            if (notReadyResult != null)
             {
-                return ToolResult.error(notReadyError).toJson();
+                return notReadyResult.toJson();
             }
         }
 
@@ -451,7 +451,8 @@ public class RevalidateObjectsTool implements IMcpTool
         String detail = fullProjectRevalidation ? projectName : projectName + " (" + objectFqns.size() + " objects)"; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
         reporter.start(context != null ? context.getOperationId() : null, NAME, STAGE_VALIDATION,
                 "Preparing " + mode + " revalidation for " + detail, context != null ? context.getRequestId() : null, //$NON-NLS-1$ //$NON-NLS-2$
-                context != null ? context.getSessionId() : null, context != null ? context.getProgressToken() : null);
+                context != null ? context.getSessionId() : null, context != null ? context.getProgressToken() : null,
+                Map.of("projectName", projectName)); //$NON-NLS-1$
         return reporter;
     }
 

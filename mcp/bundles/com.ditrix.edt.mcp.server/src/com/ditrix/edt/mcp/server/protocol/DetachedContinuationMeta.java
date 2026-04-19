@@ -9,7 +9,7 @@ package com.ditrix.edt.mcp.server.protocol;
 import java.util.Set;
 
 import com.ditrix.edt.mcp.server.progress.OperationProgressState;
-import com.ditrix.edt.mcp.server.tools.impl.GetActiveOperationTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetOperationSnapshotTool;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -117,7 +117,7 @@ public final class DetachedContinuationMeta
         JsonObject continuation = new JsonObject();
         continuation.addProperty("operationId", operationId); //$NON-NLS-1$
         continuation.addProperty("detached", true); //$NON-NLS-1$
-        continuation.addProperty("pollTool", GetActiveOperationTool.NAME); //$NON-NLS-1$
+        continuation.addProperty("pollTool", GetOperationSnapshotTool.NAME); //$NON-NLS-1$
         meta.add(McpConstants.META_DETACHED_CONTINUATION, continuation);
         copy.add("_meta", meta); //$NON-NLS-1$
         return copy;

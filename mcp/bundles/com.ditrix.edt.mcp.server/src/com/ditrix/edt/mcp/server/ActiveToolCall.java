@@ -226,7 +226,7 @@ public class ActiveToolCall
         com.google.gson.JsonObject continuation = new com.google.gson.JsonObject();
         continuation.addProperty("operationId", snapshot.getOperationId()); //$NON-NLS-1$
         continuation.addProperty("detached", true); //$NON-NLS-1$
-        continuation.addProperty("pollTool", "get_active_operation"); //$NON-NLS-1$ //$NON-NLS-2$
+        continuation.addProperty("pollTool", com.ditrix.edt.mcp.server.tools.impl.GetOperationSnapshotTool.NAME); //$NON-NLS-1$
         meta.add(com.ditrix.edt.mcp.server.protocol.McpConstants.META_DETACHED_CONTINUATION, continuation);
         result.add("_meta", meta); //$NON-NLS-1$
     }
