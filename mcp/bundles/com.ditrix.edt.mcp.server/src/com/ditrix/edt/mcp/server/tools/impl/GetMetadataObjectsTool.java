@@ -8,8 +8,11 @@ package com.ditrix.edt.mcp.server.tools.impl;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
@@ -219,70 +222,72 @@ public class GetMetadataObjectsTool implements IMcpTool
         
         // Collect metadata objects
         List<MetadataInfo> objects = new ArrayList<>();
+        int total;
         
         switch (metadataType.toLowerCase())
         {
             case TYPE_ALL:
-                collectDocuments(config, objects, nameFilter);
-                collectCatalogs(config, objects, nameFilter);
-                collectInformationRegisters(config, objects, nameFilter);
-                collectAccumulationRegisters(config, objects, nameFilter);
-                collectCommonModules(config, objects, nameFilter);
-                collectEnums(config, objects, nameFilter);
-                collectConstants(config, objects, nameFilter);
-                collectReports(config, objects, nameFilter);
-                collectDataProcessors(config, objects, nameFilter);
-                collectExchangePlans(config, objects, nameFilter);
-                collectBusinessProcesses(config, objects, nameFilter);
-                collectTasks(config, objects, nameFilter);
-                collectCommonAttributes(config, objects, nameFilter);
-                collectEventSubscriptions(config, objects, nameFilter);
-                collectScheduledJobs(config, objects, nameFilter);
+                total = 0;
+                total += collectDocuments(config, objects, nameFilter, limit);
+                total += collectCatalogs(config, objects, nameFilter, limit);
+                total += collectInformationRegisters(config, objects, nameFilter, limit);
+                total += collectAccumulationRegisters(config, objects, nameFilter, limit);
+                total += collectCommonModules(config, objects, nameFilter, limit);
+                total += collectEnums(config, objects, nameFilter, limit);
+                total += collectConstants(config, objects, nameFilter, limit);
+                total += collectReports(config, objects, nameFilter, limit);
+                total += collectDataProcessors(config, objects, nameFilter, limit);
+                total += collectExchangePlans(config, objects, nameFilter, limit);
+                total += collectBusinessProcesses(config, objects, nameFilter, limit);
+                total += collectTasks(config, objects, nameFilter, limit);
+                total += collectCommonAttributes(config, objects, nameFilter, limit);
+                total += collectEventSubscriptions(config, objects, nameFilter, limit);
+                total += collectScheduledJobs(config, objects, nameFilter, limit);
                 break;
             case TYPE_DOCUMENTS:
-                collectDocuments(config, objects, nameFilter);
+                total = collectDocuments(config, objects, nameFilter, limit);
                 break;
             case TYPE_CATALOGS:
-                collectCatalogs(config, objects, nameFilter);
+                total = collectCatalogs(config, objects, nameFilter, limit);
                 break;
             case TYPE_INFORMATION_REGISTERS:
-                collectInformationRegisters(config, objects, nameFilter);
+                total = collectInformationRegisters(config, objects, nameFilter, limit);
                 break;
             case TYPE_ACCUMULATION_REGISTERS:
-                collectAccumulationRegisters(config, objects, nameFilter);
+                total = collectAccumulationRegisters(config, objects, nameFilter, limit);
                 break;
             case TYPE_COMMON_MODULES:
-                collectCommonModules(config, objects, nameFilter);
+                total = collectCommonModules(config, objects, nameFilter, limit);
                 break;
             case TYPE_ENUMS:
-                collectEnums(config, objects, nameFilter);
+                total = collectEnums(config, objects, nameFilter, limit);
                 break;
             case TYPE_CONSTANTS:
-                collectConstants(config, objects, nameFilter);
+                total = collectConstants(config, objects, nameFilter, limit);
                 break;
             case TYPE_REPORTS:
-                collectReports(config, objects, nameFilter);
+                total = collectReports(config, objects, nameFilter, limit);
                 break;
             case TYPE_DATA_PROCESSORS:
-                collectDataProcessors(config, objects, nameFilter);
+                total = collectDataProcessors(config, objects, nameFilter, limit);
                 break;
             case TYPE_EXCHANGE_PLANS:
-                collectExchangePlans(config, objects, nameFilter);
+                total = collectExchangePlans(config, objects, nameFilter, limit);
                 break;
             case TYPE_BUSINESS_PROCESSES:
-                collectBusinessProcesses(config, objects, nameFilter);
+                total = collectBusinessProcesses(config, objects, nameFilter, limit);
                 break;
             case TYPE_TASKS:
-                collectTasks(config, objects, nameFilter);
+                total = collectTasks(config, objects, nameFilter, limit);
                 break;
             case TYPE_COMMON_ATTRIBUTES:
-                collectCommonAttributes(config, objects, nameFilter);
+                total = collectCommonAttributes(config, objects, nameFilter, limit);
                 break;
             case TYPE_EVENT_SUBSCRIPTIONS:
-                collectEventSubscriptions(config, objects, nameFilter);
+                total = collectEventSubscriptions(config, objects, nameFilter, limit);
                 break;
             case TYPE_SCHEDULED_JOBS:
-                collectScheduledJobs(config, objects, nameFilter);
+                total = collectScheduledJobs(config, objects, nameFilter, limit);
                 break;
             default:
                 return "Error: Unknown metadata type: " + metadataType + ". " + //$NON-NLS-1$ //$NON-NLS-2$
@@ -292,20 +297,19 @@ public class GetMetadataObjectsTool implements IMcpTool
         }
         
         // Format output
-        return formatOutput(projectName, objects, limit, effectiveLanguage, metadataType);
+        return formatOutput(projectName, objects, total, limit, effectiveLanguage, metadataType);
     }
     
     /**
      * Formats the output as markdown.
      */
-    private String formatOutput(String projectName, List<MetadataInfo> objects, int limit,
+    private String formatOutput(String projectName, List<MetadataInfo> objects, int total, int limit,
                                  String language, String metadataType)
     {
         StringBuilder sb = new StringBuilder();
         
         sb.append("## Configuration Metadata: ").append(projectName).append("\n\n"); //$NON-NLS-1$ //$NON-NLS-2$
         
-        int total = objects.size();
         int shown = Math.min(total, limit);
         
         if (!TYPE_ALL.equals(metadataType))
@@ -358,224 +362,126 @@ public class GetMetadataObjectsTool implements IMcpTool
     
     // ========== Collection methods ==========
     
-    private void collectDocuments(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectDocuments(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (Document doc : config.getDocuments())
-        {
-            if (matchesFilter(doc.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(doc, "Document"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(doc.getObjectModule());
-                info.hasManagerModule = hasModule(doc.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getDocuments(), config.getDocuments().size(), filter, limit, Document::getName,
+                doc -> objects.add(createMetadataInfo(doc, "Document", hasModule(doc.getObjectModule()), //$NON-NLS-1$
+                        hasModule(doc.getManagerModule()))));
     }
     
-    private void collectCatalogs(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectCatalogs(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (Catalog cat : config.getCatalogs())
-        {
-            if (matchesFilter(cat.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(cat, "Catalog"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(cat.getObjectModule());
-                info.hasManagerModule = hasModule(cat.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getCatalogs(), config.getCatalogs().size(), filter, limit, Catalog::getName,
+                cat -> objects.add(createMetadataInfo(cat, "Catalog", hasModule(cat.getObjectModule()), //$NON-NLS-1$
+                        hasModule(cat.getManagerModule()))));
     }
     
-    private void collectInformationRegisters(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectInformationRegisters(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (InformationRegister reg : config.getInformationRegisters())
-        {
-            if (matchesFilter(reg.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(reg, "InformationRegister"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(reg.getRecordSetModule());
-                info.hasManagerModule = hasModule(reg.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getInformationRegisters(), config.getInformationRegisters().size(), filter, limit,
+                InformationRegister::getName,
+                reg -> objects.add(createMetadataInfo(reg, "InformationRegister", //$NON-NLS-1$
+                        hasModule(reg.getRecordSetModule()), hasModule(reg.getManagerModule()))));
     }
     
-    private void collectAccumulationRegisters(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectAccumulationRegisters(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (AccumulationRegister reg : config.getAccumulationRegisters())
-        {
-            if (matchesFilter(reg.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(reg, "AccumulationRegister"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(reg.getRecordSetModule());
-                info.hasManagerModule = hasModule(reg.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getAccumulationRegisters(), config.getAccumulationRegisters().size(), filter, limit,
+                AccumulationRegister::getName,
+                reg -> objects.add(createMetadataInfo(reg, "AccumulationRegister", //$NON-NLS-1$
+                        hasModule(reg.getRecordSetModule()), hasModule(reg.getManagerModule()))));
     }
     
-    private void collectCommonModules(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectCommonModules(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (CommonModule mod : config.getCommonModules())
-        {
-            if (matchesFilter(mod.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(mod, "CommonModule"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(mod.getModule());
-                info.hasManagerModule = false;
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getCommonModules(), config.getCommonModules().size(), filter, limit,
+                CommonModule::getName,
+                mod -> objects.add(createMetadataInfo(mod, "CommonModule", hasModule(mod.getModule()), false))); //$NON-NLS-1$
     }
     
-    private void collectEnums(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectEnums(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (com._1c.g5.v8.dt.metadata.mdclass.Enum en : config.getEnums())
-        {
-            if (matchesFilter(en.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(en, "Enum"); //$NON-NLS-1$
-                info.hasObjectModule = false;
-                info.hasManagerModule = hasModule(en.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getEnums(), config.getEnums().size(), filter, limit,
+                com._1c.g5.v8.dt.metadata.mdclass.Enum::getName,
+                en -> objects.add(createMetadataInfo(en, "Enum", false, hasModule(en.getManagerModule())))); //$NON-NLS-1$
     }
     
-    private void collectConstants(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectConstants(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (Constant con : config.getConstants())
-        {
-            if (matchesFilter(con.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(con, "Constant"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(con.getValueManagerModule());
-                info.hasManagerModule = hasModule(con.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getConstants(), config.getConstants().size(), filter, limit, Constant::getName,
+                con -> objects.add(createMetadataInfo(con, "Constant", hasModule(con.getValueManagerModule()), //$NON-NLS-1$
+                        hasModule(con.getManagerModule()))));
     }
     
-    private void collectReports(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectReports(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (Report rep : config.getReports())
-        {
-            if (matchesFilter(rep.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(rep, "Report"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(rep.getObjectModule());
-                info.hasManagerModule = hasModule(rep.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getReports(), config.getReports().size(), filter, limit, Report::getName,
+                rep -> objects.add(createMetadataInfo(rep, "Report", hasModule(rep.getObjectModule()), //$NON-NLS-1$
+                        hasModule(rep.getManagerModule()))));
     }
     
-    private void collectDataProcessors(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectDataProcessors(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (DataProcessor dp : config.getDataProcessors())
-        {
-            if (matchesFilter(dp.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(dp, "DataProcessor"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(dp.getObjectModule());
-                info.hasManagerModule = hasModule(dp.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getDataProcessors(), config.getDataProcessors().size(), filter, limit,
+                DataProcessor::getName,
+                dp -> objects.add(createMetadataInfo(dp, "DataProcessor", hasModule(dp.getObjectModule()), //$NON-NLS-1$
+                        hasModule(dp.getManagerModule()))));
     }
     
-    private void collectExchangePlans(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectExchangePlans(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (ExchangePlan ep : config.getExchangePlans())
-        {
-            if (matchesFilter(ep.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(ep, "ExchangePlan"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(ep.getObjectModule());
-                info.hasManagerModule = hasModule(ep.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getExchangePlans(), config.getExchangePlans().size(), filter, limit,
+                ExchangePlan::getName,
+                ep -> objects.add(createMetadataInfo(ep, "ExchangePlan", hasModule(ep.getObjectModule()), //$NON-NLS-1$
+                        hasModule(ep.getManagerModule()))));
     }
     
-    private void collectBusinessProcesses(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectBusinessProcesses(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (BusinessProcess bp : config.getBusinessProcesses())
-        {
-            if (matchesFilter(bp.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(bp, "BusinessProcess"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(bp.getObjectModule());
-                info.hasManagerModule = hasModule(bp.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getBusinessProcesses(), config.getBusinessProcesses().size(), filter, limit,
+                BusinessProcess::getName,
+                bp -> objects.add(createMetadataInfo(bp, "BusinessProcess", hasModule(bp.getObjectModule()), //$NON-NLS-1$
+                        hasModule(bp.getManagerModule()))));
     }
     
-    private void collectTasks(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectTasks(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (Task task : config.getTasks())
-        {
-            if (matchesFilter(task.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(task, "Task"); //$NON-NLS-1$
-                info.hasObjectModule = hasModule(task.getObjectModule());
-                info.hasManagerModule = hasModule(task.getManagerModule());
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getTasks(), config.getTasks().size(), filter, limit, Task::getName,
+                task -> objects.add(createMetadataInfo(task, "Task", hasModule(task.getObjectModule()), //$NON-NLS-1$
+                        hasModule(task.getManagerModule()))));
     }
     
-    private void collectCommonAttributes(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectCommonAttributes(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (CommonAttribute attr : config.getCommonAttributes())
-        {
-            if (matchesFilter(attr.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(attr, "CommonAttribute"); //$NON-NLS-1$
-                info.hasObjectModule = false;
-                info.hasManagerModule = false;
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getCommonAttributes(), config.getCommonAttributes().size(), filter, limit,
+                CommonAttribute::getName,
+                attr -> objects.add(createMetadataInfo(attr, "CommonAttribute", false, false))); //$NON-NLS-1$
     }
     
-    private void collectEventSubscriptions(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectEventSubscriptions(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (EventSubscription sub : config.getEventSubscriptions())
-        {
-            if (matchesFilter(sub.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(sub, "EventSubscription"); //$NON-NLS-1$
-                info.hasObjectModule = false;
-                info.hasManagerModule = false;
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getEventSubscriptions(), config.getEventSubscriptions().size(), filter, limit,
+                EventSubscription::getName,
+                sub -> objects.add(createMetadataInfo(sub, "EventSubscription", false, false))); //$NON-NLS-1$
     }
     
-    private void collectScheduledJobs(Configuration config, List<MetadataInfo> objects, String filter)
+    private int collectScheduledJobs(Configuration config, List<MetadataInfo> objects, String filter, int limit)
     {
-        for (ScheduledJob job : config.getScheduledJobs())
-        {
-            if (matchesFilter(job.getName(), filter))
-            {
-                MetadataInfo info = createMetadataInfo(job, "ScheduledJob"); //$NON-NLS-1$
-                info.hasObjectModule = false;
-                info.hasManagerModule = false;
-                objects.add(info);
-            }
-        }
+        return collectLimited(config.getScheduledJobs(), config.getScheduledJobs().size(), filter, limit,
+                ScheduledJob::getName,
+                job -> objects.add(createMetadataInfo(job, "ScheduledJob", false, false))); //$NON-NLS-1$
     }
     
     // ========== Helper methods ==========
     
-    private MetadataInfo createMetadataInfo(MdObject mdObject, String type)
+    private MetadataInfo createMetadataInfo(MdObject mdObject, String type, boolean hasObjectModule, boolean hasManagerModule)
     {
         MetadataInfo info = new MetadataInfo();
         info.name = mdObject.getName();
         info.type = type;
         info.comment = mdObject.getComment();
+        info.hasObjectModule = hasObjectModule;
+        info.hasManagerModule = hasManagerModule;
         
         // Get synonyms - getSynonym() returns EMap<String, String> directly
         EMap<String, String> synonym = mdObject.getSynonym();
@@ -593,14 +499,66 @@ public class GetMetadataObjectsTool implements IMcpTool
         
         return info;
     }
-    
-    private boolean matchesFilter(String name, String filter)
+
+    static <T> int collectLimited(Iterable<T> source, int sourceSize, String filter, int limit,
+            Function<T, String> nameExtractor, Consumer<T> collector)
     {
-        if (filter == null || filter.isEmpty())
+        int safeLimit = Math.max(limit, 0);
+        String normalizedFilter = normalizeFilter(filter);
+
+        if (!hasText(normalizedFilter))
+        {
+            if (safeLimit > 0)
+            {
+                int collected = 0;
+                for (T item : source)
+                {
+                    if (collected >= safeLimit)
+                    {
+                        break;
+                    }
+                    collector.accept(item);
+                    collected++;
+                }
+            }
+            return Math.max(sourceSize, 0);
+        }
+
+        int total = 0;
+        int collected = 0;
+        for (T item : source)
+        {
+            String name = nameExtractor != null ? nameExtractor.apply(item) : null;
+            if (matchesFilter(name, normalizedFilter))
+            {
+                total++;
+                if (collected < safeLimit)
+                {
+                    collector.accept(item);
+                    collected++;
+                }
+            }
+        }
+        return total;
+    }
+
+    private static boolean matchesFilter(String name, String normalizedFilter)
+    {
+        if (!hasText(normalizedFilter))
         {
             return true;
         }
-        return name != null && name.toLowerCase().contains(filter.toLowerCase());
+        return name != null && name.toLowerCase(Locale.ROOT).contains(normalizedFilter);
+    }
+
+    private static String normalizeFilter(String filter)
+    {
+        return hasText(filter) ? filter.toLowerCase(Locale.ROOT) : null;
+    }
+
+    private static boolean hasText(String value)
+    {
+        return value != null && !value.isBlank();
     }
     
     private boolean hasModule(Module module)

@@ -6,3 +6,8 @@ project_doc_max_bytes = 131072
 
 [tools]
 view_image = true
+
+[mcp_servers.edt-mcp]
+url = "http://172.24.192.1:8766/mcp"
+required = false
+startup_timeout_sec = 120.0

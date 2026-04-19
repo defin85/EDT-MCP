@@ -12,6 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.sun.net.httpserver.HttpExchange;
+import com.ditrix.edt.mcp.server.progress.OperationProgressState;
+import com.ditrix.edt.mcp.server.protocol.DetachedContinuationMeta;
 
 /**
  * Represents an active MCP tool call that can be interrupted by user.
@@ -23,6 +25,7 @@ public class ActiveToolCall
     private final HttpExchange exchange;
     private final String toolName;
     private final Object requestId;
+    private final McpServer server;
     private final long startTime;
     private final AtomicBoolean responded = new AtomicBoolean(false);
     
@@ -32,12 +35,14 @@ public class ActiveToolCall
      * @param exchange the HTTP exchange
      * @param toolName the tool being executed
      * @param requestId the JSON-RPC request ID
+     * @param server owning MCP server
      */
-    public ActiveToolCall(HttpExchange exchange, String toolName, Object requestId)
+    public ActiveToolCall(HttpExchange exchange, String toolName, Object requestId, McpServer server)
     {
         this.exchange = exchange;
         this.toolName = toolName;
         this.requestId = requestId;
+        this.server = server;
         this.startTime = System.currentTimeMillis();
     }
     
@@ -184,6 +189,7 @@ public class ActiveToolCall
         textContent.addProperty("text", messageText); //$NON-NLS-1$
         content.add(textContent);
         result.add("content", content); //$NON-NLS-1$
+        attachDetachedContinuationHint(result);
         response.add("result", result); //$NON-NLS-1$
         
         // Handle request ID (can be string or number)
@@ -197,5 +203,31 @@ public class ActiveToolCall
         }
         
         return new com.google.gson.Gson().toJson(response);
+    }
+
+    private void attachDetachedContinuationHint(com.google.gson.JsonObject result)
+    {
+        if (server == null || !DetachedContinuationMeta.isSupportedTool(toolName))
+        {
+            return;
+        }
+
+        OperationProgressState snapshot = server.getActiveOperationSnapshot();
+        if (snapshot == null || !toolName.equals(snapshot.getToolName()))
+        {
+            return;
+        }
+        if (!DetachedContinuationMeta.shouldExposeForCancellation(toolName, snapshot.getStage()))
+        {
+            return;
+        }
+
+        com.google.gson.JsonObject meta = new com.google.gson.JsonObject();
+        com.google.gson.JsonObject continuation = new com.google.gson.JsonObject();
+        continuation.addProperty("operationId", snapshot.getOperationId()); //$NON-NLS-1$
+        continuation.addProperty("detached", true); //$NON-NLS-1$
+        continuation.addProperty("pollTool", "get_active_operation"); //$NON-NLS-1$ //$NON-NLS-2$
+        meta.add(com.ditrix.edt.mcp.server.protocol.McpConstants.META_DETACHED_CONTINUATION, continuation);
+        result.add("_meta", meta); //$NON-NLS-1$
     }
 }

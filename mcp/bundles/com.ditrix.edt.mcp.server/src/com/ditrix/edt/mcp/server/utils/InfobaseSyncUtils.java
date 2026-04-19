@@ -178,4 +178,21 @@ public final class InfobaseSyncUtils
                 return updateState;
         }
     }
+
+    /**
+     * Validates that the requested update mode is compatible with the current infobase state.
+     *
+     * @param fullUpdate whether full update was requested
+     * @param updateState derived infobase state
+     * @return error message when requested mode is invalid; {@code null} otherwise
+     */
+    public static String validateRequestedUpdateMode(boolean fullUpdate, String updateState)
+    {
+        if (!fullUpdate && "FULL_UPDATE_REQUIRED".equals(updateState)) //$NON-NLS-1$
+        {
+            return "Incremental update is not available because the infobase requires initial synchronization. " //$NON-NLS-1$
+                    + "Retry with fullUpdate=true."; //$NON-NLS-1$
+        }
+        return null;
+    }
 }

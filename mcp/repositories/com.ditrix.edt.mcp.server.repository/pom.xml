@@ -16,4 +16,60 @@
 
   <name>EDT MCP Server Repository</name>
 
+  <properties>
+    <maven.build.timestamp.format>yyyyMMddHHmmss</maven.build.timestamp.format>
+    <mcp.localUpdateSiteTimestamp>${maven.build.timestamp}</mcp.localUpdateSiteTimestamp>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>copy-versioned-local-update-site-zip</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <copy file="${project.build.directory}/${project.artifactId}-${project.version}.zip"
+                  tofile="${project.build.directory}/${project.artifactId}-${project.version}-${mcp.localUpdateSiteTimestamp}.zip"
+                  overwrite="true" />
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>build-stable-local-update-site</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>python3</executable>
+              <arguments>
+                <argument>${project.basedir}/../../../scripts/build_local_update_site.py</argument>
+                <argument>--source-repository</argument>
+                <argument>${project.build.directory}/repository</argument>
+                <argument>--composite-root</argument>
+                <argument>${project.basedir}/local-update-site</argument>
+                <argument>--zip-output</argument>
+                <argument>${project.basedir}/local-update-site.zip</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
 </project>

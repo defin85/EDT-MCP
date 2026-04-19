@@ -9,12 +9,19 @@ package com.ditrix.edt.mcp.server.protocol.jsonrpc;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.ditrix.edt.mcp.server.tools.IMcpTool;
+
 /**
  * MCP tools/list response result.
  */
 public class ToolsListResult
 {
     private List<ToolInfo> tools = new ArrayList<>();
+
+    public void addTool(String name, String description, Object inputSchema)
+    {
+        addTool(name, description, inputSchema, IMcpTool.TaskSupport.FORBIDDEN.getWireValue());
+    }
     
     public void addTool(String name, String description, Object inputSchema, String taskSupport)
     {

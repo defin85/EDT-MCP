@@ -189,6 +189,15 @@ public class DebugLaunchTool implements IMcpTool
 
                     if (!"UPDATED".equals(updateState) && !"BEING_UPDATED".equals(updateState)) //$NON-NLS-1$ //$NON-NLS-2$
                     {
+                        String invalidModeMessage = InfobaseSyncUtils.validateRequestedUpdateMode(false, updateState);
+                        if (invalidModeMessage != null)
+                        {
+                            return ToolResult.error("Failed to update database before launch: " //$NON-NLS-1$
+                                    + invalidModeMessage + " You can retry with updateBeforeLaunch=false to skip " //$NON-NLS-1$
+                                    + "automatic update, or run update_database with fullUpdate=true first.") //$NON-NLS-1$
+                                    .toJson();
+                        }
+
                         Activator.logInfo("Updating database before launch: project=" + projectName + //$NON-NLS-1$
                                 ", application=" + applicationId); //$NON-NLS-1$
 

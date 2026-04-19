@@ -24,10 +24,12 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.progress.CapturingProgressMonitor;
+import com.ditrix.edt.mcp.server.progress.InfobaseSynchronizationDetachedTracker;
 import com.ditrix.edt.mcp.server.progress.OperationProgressReporter;
 import com.ditrix.edt.mcp.server.progress.ToolExecutionContext;
 import com.ditrix.edt.mcp.server.progress.ToolExecutionContextHolder;
 import com.ditrix.edt.mcp.server.tasks.TaskCancellationToken;
+import com.ditrix.edt.mcp.server.tasks.TaskSchedulingKey;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
@@ -87,6 +89,12 @@ public class UpdateDatabaseTool implements IMcpTool
     {
         return TaskSupport.OPTIONAL;
     }
+
+    @Override
+    public TaskSchedulingKey getTaskSchedulingKey(Map<String, String> params)
+    {
+        return TaskSchedulingKey.projectScoped(JsonUtils.extractStringArgument(params, "projectName")); //$NON-NLS-1$
+    }
     
     @Override
     public String execute(Map<String, String> params)
@@ -134,6 +142,12 @@ public class UpdateDatabaseTool implements IMcpTool
         OperationProgressReporter reporter = createProgressReporter(context, fullUpdate, autoRestructure);
         CapturingProgressMonitor monitor = new CapturingProgressMonitor(reporter);
         TaskCancellationToken cancellationToken = context != null ? context.getCancellationToken() : null;
+        IProject project = null;
+        IInfobaseApplication infobaseApplication = null;
+        IInfobaseSynchronizationManager synchronizationManager = null;
+        String applicationName = null;
+        boolean syncTriggered = false;
+        boolean detachedHandoff = false;
         if (isCancellationRequested(cancellationToken, monitor))
         {
             return cancelled(reporter);
@@ -144,7 +158,7 @@ public class UpdateDatabaseTool implements IMcpTool
         {
             reporter.stage(STAGE_VALIDATION, "Validating project and application state"); //$NON-NLS-1$
             IWorkspace workspace = ResourcesPlugin.getWorkspace();
-            IProject project = workspace.getRoot().getProject(projectName);
+            project = workspace.getRoot().getProject(projectName);
             
             if (project == null || !project.exists())
             {
@@ -167,7 +181,7 @@ public class UpdateDatabaseTool implements IMcpTool
                 return fail(reporter, "IApplicationManager service is not available"); //$NON-NLS-1$
             }
 
-            IInfobaseSynchronizationManager synchronizationManager = Activator.getDefault()
+            synchronizationManager = Activator.getDefault()
                     .getInfobaseSynchronizationManager();
             if (synchronizationManager == null)
             {
@@ -183,8 +197,9 @@ public class UpdateDatabaseTool implements IMcpTool
             }
             
             IApplication application = appOpt.get();
+            applicationName = application.getName();
 
-            IInfobaseApplication infobaseApplication = InfobaseSyncUtils.asInfobaseApplication(application);
+            infobaseApplication = InfobaseSyncUtils.asInfobaseApplication(application);
             if (infobaseApplication == null)
             {
                 return fail(reporter, "Application is not an infobase application: " + applicationId); //$NON-NLS-1$
@@ -205,6 +220,11 @@ public class UpdateDatabaseTool implements IMcpTool
             {
                 return fail(reporter, "Application is currently being synchronized. Please wait."); //$NON-NLS-1$
             }
+            String invalidModeMessage = InfobaseSyncUtils.validateRequestedUpdateMode(fullUpdate, updateStateBefore);
+            if (invalidModeMessage != null)
+            {
+                return fail(reporter, invalidModeMessage);
+            }
 
             String updateType = fullUpdate ? "FULL" : "INCREMENTAL"; //$NON-NLS-1$ //$NON-NLS-2$
             Activator.logInfo("Update database: project=" + projectName +  //$NON-NLS-1$
@@ -215,6 +235,7 @@ public class UpdateDatabaseTool implements IMcpTool
             reporter.stage(STAGE_UPDATE_START,
                     "Starting " + updateType.toLowerCase(Locale.ROOT) + " database update"); //$NON-NLS-1$ //$NON-NLS-2$
             reporter.indeterminate(STAGE_WAITING_FOR_EDT, "Waiting for EDT synchronization to finish"); //$NON-NLS-1$
+            syncTriggered = true;
 
             boolean updated = fullUpdate
                     ? synchronizationManager.reloadInfobase(project, infobaseApplication.getInfobase(),
@@ -298,7 +319,16 @@ public class UpdateDatabaseTool implements IMcpTool
         }
         finally
         {
-            clearActiveOperation(server);
+            if (!detachedHandoff && syncTriggered && isCancellationRequested(cancellationToken, monitor)
+                    && project != null && infobaseApplication != null && synchronizationManager != null)
+            {
+                detachedHandoff = InfobaseSynchronizationDetachedTracker.handoff(server, reporter, project,
+                        infobaseApplication.getInfobase(), synchronizationManager, applicationId, applicationName);
+            }
+            if (!detachedHandoff)
+            {
+                clearActiveOperation(server, context);
+            }
         }
     }
 
@@ -327,11 +357,11 @@ public class UpdateDatabaseTool implements IMcpTool
         }
     }
 
-    private void clearActiveOperation(McpServer server)
+    private void clearActiveOperation(McpServer server, ToolExecutionContext context)
     {
         if (server != null)
         {
-            server.clearActiveOperation();
+            server.clearActiveOperation(context != null ? context.getOperationId() : null);
         }
     }
 

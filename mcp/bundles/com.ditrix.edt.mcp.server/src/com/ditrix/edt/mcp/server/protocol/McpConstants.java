@@ -100,6 +100,9 @@ public final class McpConstants
 
     /** Immediate-response metadata key for models */
     public static final String META_MODEL_IMMEDIATE_RESPONSE = "io.modelcontextprotocol/model-immediate-response"; //$NON-NLS-1$
+
+    /** Detached continuation metadata key */
+    public static final String META_DETACHED_CONTINUATION = "io.ditrix.edt.mcp/detached-continuation"; //$NON-NLS-1$
     
     private McpConstants()
     {

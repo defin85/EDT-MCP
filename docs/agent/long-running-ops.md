@@ -10,7 +10,10 @@
 - `revalidate_objects`
 - `debug_launch`
 
-Из них только `update_database` сейчас явно документирован как task-augmented tool surface.
+Первая task-enabled волна: `update_database`, `clean_project`, и full-project `revalidate_objects`.
+`debug_launch` остаётся sync-first в этом rollout-е.
+Тяжёлые read-only diagnostics (`get_problem_summary`, `get_project_errors`, `validate_query`) тоже остаются sync-first:
+для них текущая стратегия — contract shaping через summary/filter/limit, а не task enablement.
 
 ## External Contract
 
@@ -25,7 +28,11 @@
 - `_meta.progressToken` включает `notifications/progress`
 - task augmentation идёт через `tools/call` + `task`
 - финальный task-backed result читается через `tasks/result`
-- `get_active_operation` остаётся polling fallback
+- terminal sync/task payload для supported operations может нести `_meta["io.ditrix.edt.mcp/detached-continuation"]`
+- конфликтующие mutable task-backed операции явно отклоняются, а не запускаются параллельно
+- тяжёлые diagnostics остаются sync-only и опираются на summary/filter/limit shaping вместо task lifecycle
+- `get_active_operation` остаётся polling fallback и теперь может возвращать detached snapshot с `detached: true`, stable `operationId` и structured `details`
+- cleanup/discoverability для `debug_launch` вынесены в отдельный runtime-debug-control трек, а не в этот task rollout
 
 ## Code Entry Points
 
@@ -55,19 +62,20 @@
 4. MCP emits `notifications/progress`
 5. Final tool result remains backward-compatible for clients that ignore progress
 
-### Task-Augmented Update
+### Task-Augmented Long Operation
 
 1. Client calls `tools/call` with `task`
 2. Initial response returns `CreateTaskResult`
-3. Progress may continue through the original `progressToken`
-4. Client polls `tasks/get`, `tasks/list`, or reads final payload through `tasks/result`
-5. `get_active_operation` remains compatibility fallback
+3. Пока task live, progress может идти через исходный `progressToken`
+4. После terminal MCP outcome detached continuation, если она есть, переносится в `get_active_operation`
+5. Terminal payload/task result может нести machine-readable continuation hint
+6. `get_active_operation` остаётся compatibility fallback
 
 ## Evidence And Gaps
 
 - Product/documentation evidence: `README.md`
 - Build/test evidence: `tests/TESTING.md`, `mcp/tests/com.ditrix.edt.mcp.server.tests/`
-- Current evidence gap: dedicated checked-in automated coverage for task-backed `update_database` / `notifications/progress` is not yet obvious as a focused suite; runtime verification still depends on a live EDT server
+- Current evidence gap: detached tracker lifecycle и continuation hint покрыты unit-level contract tests, но live rebuild/update continuation всё ещё требует running EDT server
 
 ## Verify Strategy
 

@@ -14,8 +14,18 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.ditrix.edt.mcp.server.McpServer;
+import com.ditrix.edt.mcp.server.progress.OperationProgressReporter;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.IMcpTool.TaskSupport;
 import com.ditrix.edt.mcp.server.tools.McpToolRegistry;
+import com.ditrix.edt.mcp.server.tools.impl.CleanProjectTool;
+import com.ditrix.edt.mcp.server.tools.impl.DebugLaunchTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetProblemSummaryTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetProjectErrorsTool;
+import com.ditrix.edt.mcp.server.tools.impl.RevalidateObjectsTool;
+import com.ditrix.edt.mcp.server.tools.impl.UpdateDatabaseTool;
+import com.ditrix.edt.mcp.server.protocol.jsonrpc.ToolCallResult;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -64,6 +74,8 @@ public class McpProtocolHandlerTest
         assertNotNull("Should have protocolVersion", result.get("protocolVersion"));
         assertNotNull("Should have capabilities", result.get("capabilities"));
         assertNotNull("Should have serverInfo", result.get("serverInfo"));
+        assertNotNull("Should advertise tasks capability",
+            result.getAsJsonObject("capabilities").getAsJsonObject("tasks"));
 
         JsonObject serverInfo = result.getAsJsonObject("serverInfo");
         assertNotNull(serverInfo.get("name"));
@@ -156,9 +168,9 @@ public class McpProtocolHandlerTest
     @Test
     public void testToolsListWithTools()
     {
-        registry.register(new StubTool("tool_alpha", "Alpha tool", "{\"type\":\"object\"}"));
+        registry.register(new StubTool("tool_alpha", "Alpha tool", "{\"type\":\"object\"}", TaskSupport.FORBIDDEN));
         registry.register(new StubTool("tool_beta", "Beta tool",
-            "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}"));
+            "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}", TaskSupport.OPTIONAL));
 
         String request = buildJsonRpcRequest(1, "tools/list", null);
         String response = handler.processRequest(request);
@@ -174,7 +186,41 @@ public class McpProtocolHandlerTest
             assertNotNull("Tool should have name", tool.get("name"));
             assertNotNull("Tool should have description", tool.get("description"));
             assertNotNull("Tool should have inputSchema", tool.get("inputSchema"));
+            assertNotNull("Tool should advertise task execution metadata", tool.getAsJsonObject("execution"));
+            assertNotNull("Tool should advertise task support",
+                tool.getAsJsonObject("execution").get("taskSupport"));
         }
+    }
+
+    @Test
+    public void testToolsListReportsRealToolTaskPolicies()
+    {
+        registry.register(new UpdateDatabaseTool());
+        registry.register(new CleanProjectTool());
+        registry.register(new RevalidateObjectsTool());
+        registry.register(new DebugLaunchTool());
+        registry.register(new GetProblemSummaryTool());
+        registry.register(new GetProjectErrorsTool());
+
+        String request = buildJsonRpcRequest(1, "tools/list", null);
+        String response = handler.processRequest(request);
+
+        JsonObject json = parseResponse(response);
+        JsonObject result = json.getAsJsonObject("result");
+        Map<String, String> taskPolicies = new java.util.HashMap<>();
+        for (JsonElement toolEl : result.getAsJsonArray("tools"))
+        {
+            JsonObject tool = toolEl.getAsJsonObject();
+            taskPolicies.put(tool.get("name").getAsString(),
+                tool.getAsJsonObject("execution").get("taskSupport").getAsString());
+        }
+
+        assertEquals("optional", taskPolicies.get(UpdateDatabaseTool.NAME));
+        assertEquals("optional", taskPolicies.get(CleanProjectTool.NAME));
+        assertEquals("optional", taskPolicies.get(RevalidateObjectsTool.NAME));
+        assertEquals("forbidden", taskPolicies.get(DebugLaunchTool.NAME));
+        assertEquals("forbidden", taskPolicies.get(GetProblemSummaryTool.NAME));
+        assertEquals("forbidden", taskPolicies.get(GetProjectErrorsTool.NAME));
     }
 
     // === Invalid Requests ===
@@ -266,6 +312,89 @@ public class McpProtocolHandlerTest
         assertNotNull("Should return error for null tool name", json.get("error"));
     }
 
+    @Test
+    public void testToolCallRejectsSyncInvocationForTaskRequiredTool()
+    {
+        registry.register(new StubTool("task_required_tool", "Requires task", "{\"type\":\"object\"}", TaskSupport.REQUIRED));
+
+        String request = buildToolCallRequest(1, "task_required_tool", null);
+        String response = handler.processRequest(request);
+
+        JsonObject json = parseResponse(response);
+        assertNotNull(json.get("error"));
+        assertEquals(McpConstants.ERROR_INVALID_PARAMS, json.getAsJsonObject("error").get("code").getAsInt());
+    }
+
+    @Test
+    public void testToolCallRejectsTaskInvocationForForbiddenTool()
+    {
+        registry.register(new StubTool("sync_only_tool", "Sync only", "{\"type\":\"object\"}", TaskSupport.FORBIDDEN));
+
+        String request = buildTaskToolCallRequest(1, "sync_only_tool", null, "{\"ttl\":60000}");
+        String response = handler.processRequest(request);
+
+        JsonObject json = parseResponse(response);
+        assertNotNull(json.get("error"));
+        assertEquals(McpConstants.ERROR_INVALID_PARAMS, json.getAsJsonObject("error").get("code").getAsInt());
+    }
+
+    @Test
+    public void testToolCallRejectsTaskInvocationForDebugLaunch()
+    {
+        registry.register(new DebugLaunchTool());
+
+        String request = buildTaskToolCallRequest(1, DebugLaunchTool.NAME,
+            "{\"projectName\":\"TestConfiguration\",\"applicationId\":\"app-1\"}", "{\"ttl\":60000}");
+        String response = handler.processRequest(request);
+
+        JsonObject json = parseResponse(response);
+        assertNotNull(json.get("error"));
+        assertEquals(McpConstants.ERROR_INVALID_PARAMS, json.getAsJsonObject("error").get("code").getAsInt());
+        assertTrue(json.getAsJsonObject("error").get("message").getAsString().contains(DebugLaunchTool.NAME));
+    }
+
+    @Test
+    public void testExtractToolFailureMessageReturnsErrorForFailedStructuredContent()
+    {
+        JsonElement payload = JsonParser.parseString(GsonProvider.toJson(
+            ToolCallResult.json(JsonParser.parseString("{\"success\":false,\"error\":\"boom\"}"))));
+
+        assertEquals("boom", McpProtocolHandler.extractToolFailureMessage(payload));
+    }
+
+    @Test
+    public void testExtractToolFailureMessageReturnsNullForSuccessfulStructuredContent()
+    {
+        JsonElement payload = JsonParser.parseString(GsonProvider.toJson(
+            ToolCallResult.json(JsonParser.parseString("{\"success\":true,\"message\":\"ok\"}"))));
+
+        assertNull(McpProtocolHandler.extractToolFailureMessage(payload));
+    }
+
+    @Test
+    public void testAttachTaskResultMetaAddsDetachedContinuationWhenSnapshotExists()
+    {
+        McpServer server = new McpServer();
+        OperationProgressReporter reporter = new OperationProgressReporter();
+        reporter.start("task-1", "clean_project", "clean_build", "Running clean build", null, null, null); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+        reporter.detachedUpdate("derived_data", "Detached derived data continues", Map.of("trackingType", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                "derived_data")); //$NON-NLS-1$
+        server.setActiveOperation(reporter);
+
+        JsonElement payload = JsonParser.parseString(GsonProvider.toJson(
+            ToolCallResult.json(JsonParser.parseString("{\"success\":false,\"error\":\"Task was cancelled\"}"))));
+
+        JsonObject enriched = McpProtocolHandler.attachTaskResultMeta(payload, "task-1", server).getAsJsonObject(); //$NON-NLS-1$
+        JsonObject meta = enriched.getAsJsonObject("_meta"); //$NON-NLS-1$
+
+        assertNotNull(meta);
+        assertTrue(meta.has(McpConstants.META_RELATED_TASK));
+        assertEquals("task-1", meta.getAsJsonObject(McpConstants.META_RELATED_TASK).get("taskId").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertTrue(meta.has(McpConstants.META_DETACHED_CONTINUATION));
+        assertEquals("task-1", meta.getAsJsonObject(McpConstants.META_DETACHED_CONTINUATION) //$NON-NLS-1$
+                .get("operationId").getAsString()); //$NON-NLS-1$
+    }
+
     // === Helpers ===
 
     private String buildJsonRpcRequest(Object id, String method, String paramsJson)
@@ -303,6 +432,22 @@ public class McpProtocolHandlerTest
         return buildJsonRpcRequest(id, "tools/call", params.toString());
     }
 
+    private String buildTaskToolCallRequest(Object id, String toolName, String argsJson, String taskJson)
+    {
+        StringBuilder params = new StringBuilder("{\"name\":\"").append(toolName).append("\"");
+        if (argsJson != null)
+        {
+            params.append(",\"arguments\":").append(argsJson);
+        }
+        else
+        {
+            params.append(",\"arguments\":{}");
+        }
+        params.append(",\"task\":").append(taskJson);
+        params.append("}");
+        return buildJsonRpcRequest(id, "tools/call", params.toString());
+    }
+
     private JsonObject parseResponse(String response)
     {
         return JsonParser.parseString(response).getAsJsonObject();
@@ -316,12 +461,14 @@ public class McpProtocolHandlerTest
         private final String name;
         private final String description;
         private final String inputSchema;
+        private final TaskSupport taskSupport;
 
-        StubTool(String name, String description, String inputSchema)
+        StubTool(String name, String description, String inputSchema, TaskSupport taskSupport)
         {
             this.name = name;
             this.description = description;
             this.inputSchema = inputSchema;
+            this.taskSupport = taskSupport;
         }
 
         @Override
@@ -332,6 +479,9 @@ public class McpProtocolHandlerTest
 
         @Override
         public String getInputSchema() { return inputSchema; }
+
+        @Override
+        public TaskSupport getTaskSupport() { return taskSupport; }
 
         @Override
         public String execute(Map<String, String> params) { return "{}"; }

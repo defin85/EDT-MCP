@@ -29,12 +29,12 @@ public final class TaskRegistry
     private final ConcurrentMap<String, TaskRecord> tasks = new ConcurrentHashMap<>();
 
     public TaskRecord createToolTask(String requestId, String sessionId, String toolName, Long requestedTtl,
-            String projectName)
+            String projectName, TaskSchedulingKey schedulingKey)
     {
         cleanupExpired();
         long ttl = requestedTtl != null && requestedTtl.longValue() > 0 ? requestedTtl.longValue() : DEFAULT_TTL_MS;
         TaskRecord record = new TaskRecord(UUID.randomUUID().toString(), requestId, sessionId, toolName, projectName,
-                Long.valueOf(ttl), DEFAULT_POLL_INTERVAL_MS);
+                schedulingKey, Long.valueOf(ttl), DEFAULT_POLL_INTERVAL_MS);
         tasks.put(record.getTaskId(), record);
         return record;
     }
@@ -72,19 +72,21 @@ public final class TaskRegistry
         return new ListPage(visibleTasks.subList(fromIndex, toIndex), nextCursor);
     }
 
-    public boolean hasRunningTask(String toolName, String projectName)
+    public TaskRecord findConflictingTask(TaskSchedulingKey schedulingKey)
     {
         cleanupExpired();
+        if (schedulingKey == null || !schedulingKey.isMutable())
+        {
+            return null;
+        }
         for (TaskRecord task : tasks.values())
         {
-            if (toolName.equals(task.getToolName())
-                    && equalsNullable(projectName, task.getProjectName())
-                    && !task.getStatus().isTerminal())
+            if (!task.getStatus().isTerminal() && task.getSchedulingKey().conflictsWith(schedulingKey))
             {
-                return true;
+                return task;
             }
         }
-        return false;
+        return null;
     }
 
     public void attachExecutionHandle(String taskId, TaskExecutionHandle handle)
@@ -194,15 +196,6 @@ public final class TaskRegistry
             return DEFAULT_PAGE_SIZE;
         }
         return Math.min(MAX_PAGE_SIZE, limit.intValue());
-    }
-
-    private boolean equalsNullable(String left, String right)
-    {
-        if (left == null)
-        {
-            return right == null;
-        }
-        return left.equals(right);
     }
 
     public static final class ListPage

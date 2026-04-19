@@ -21,6 +21,7 @@ public final class TaskRecord
     private final String sessionId;
     private final String toolName;
     private final String projectName;
+    private final TaskSchedulingKey schedulingKey;
     private final Long ttl;
     private final int pollInterval;
     private final Instant createdAt;
@@ -32,14 +33,15 @@ public final class TaskRecord
     private TaskResultEnvelope resultEnvelope;
     private OperationProgressState progressState;
 
-    public TaskRecord(String taskId, String requestId, String sessionId, String toolName, String projectName, Long ttl,
-            int pollInterval)
+    public TaskRecord(String taskId, String requestId, String sessionId, String toolName, String projectName,
+            TaskSchedulingKey schedulingKey, Long ttl, int pollInterval)
     {
         this.taskId = Objects.requireNonNull(taskId);
         this.requestId = requestId;
         this.sessionId = sessionId;
         this.toolName = toolName;
         this.projectName = projectName;
+        this.schedulingKey = schedulingKey != null ? schedulingKey : TaskSchedulingKey.none();
         this.ttl = ttl;
         this.pollInterval = pollInterval;
         this.createdAt = Instant.now();
@@ -71,6 +73,11 @@ public final class TaskRecord
     public synchronized String getProjectName()
     {
         return projectName;
+    }
+
+    public synchronized TaskSchedulingKey getSchedulingKey()
+    {
+        return schedulingKey;
     }
 
     public synchronized TaskStatus getStatus()
@@ -221,7 +228,7 @@ public final class TaskRecord
         {
             return false;
         }
-        return createdAt.plusMillis(ttl.longValue()).isBefore(now);
+        return lastUpdatedAt.plusMillis(ttl.longValue()).isBefore(now);
     }
 
     public synchronized boolean belongsToSession(String currentSessionId)

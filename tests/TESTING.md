@@ -58,8 +58,12 @@ python tests/e2e/run_e2e_tests.py --junit-xml results.xml
 | BSL Code | list_modules, get_module_structure, read_module_source, read_method_source, search_in_code |
 | Advanced | find_references, get_applications, get_form_screenshot |
 
-Task-backed `update_database`, `notifications/progress`, and compatibility polling through `get_active_operation`
-are currently documented and manually verifiable, but do not yet have a dedicated checked-in automated suite.
+Task capability advertisement, per-tool `execution.taskSupport`, task registry/scheduling behavior,
+detached continuation metadata, and detached snapshot reporter semantics now have checked-in unit
+coverage. Live task lifecycle, ownership, conflict control, sync compatibility,
+`notifications/progress`, compatibility polling through `get_active_operation`, and detached rebuild
+continuation have been manually verified against a real MCP client. Live detached infobase update
+continuation still does not have a dedicated runtime E2E suite.
 
 ## Test Configuration
 

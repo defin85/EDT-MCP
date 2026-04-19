@@ -72,6 +72,7 @@ public class GetActiveOperationTool implements IMcpTool
                 .put("operationId", operation.getOperationId()) //$NON-NLS-1$
                 .put("toolName", operation.getToolName()) //$NON-NLS-1$
                 .put("status", operation.getStatus()) //$NON-NLS-1$
+                .put("detached", operation.isDetached()) //$NON-NLS-1$
                 .put("stage", operation.getStage()) //$NON-NLS-1$
                 .put("message", operation.getMessage()) //$NON-NLS-1$
                 .put("indeterminate", operation.isIndeterminate()) //$NON-NLS-1$
@@ -89,6 +90,10 @@ public class GetActiveOperationTool implements IMcpTool
         if (operation.getStartedAt() != null)
         {
             result.put("startedAt", operation.getStartedAt().toString()); //$NON-NLS-1$
+        }
+        if (!operation.getDetails().isEmpty())
+        {
+            result.put("details", operation.getDetails()); //$NON-NLS-1$
         }
 
         return result.toJson();

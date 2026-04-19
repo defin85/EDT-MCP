@@ -96,9 +96,9 @@ public final class BuildUtils
      * 
      * @param project the IProject to wait for
      */
-    public static void waitForDerivedData(IProject project)
+    public static boolean waitForDerivedData(IProject project)
     {
-        waitForDerivedData(project, DEFAULT_DD_TIMEOUT_MS);
+        return waitForDerivedData(project, DEFAULT_DD_TIMEOUT_MS);
     }
     
     /**
@@ -108,7 +108,7 @@ public final class BuildUtils
      * @param project the IProject to wait for
      * @param timeoutMs timeout in milliseconds
      */
-    public static void waitForDerivedData(IProject project, long timeoutMs)
+    public static boolean waitForDerivedData(IProject project, long timeoutMs)
     {
         try
         {
@@ -116,7 +116,7 @@ public final class BuildUtils
             if (ddProvider == null)
             {
                 Activator.logInfo("IDerivedDataManagerProvider not available, skipping DD wait"); //$NON-NLS-1$
-                return;
+                return true;
             }
             
             // Get DtProject for the IProject
@@ -124,14 +124,14 @@ public final class BuildUtils
             if (dtProjectManager == null)
             {
                 Activator.logInfo("IDtProjectManager not available, skipping DD wait"); //$NON-NLS-1$
-                return;
+                return true;
             }
             
             IDtProject dtProject = dtProjectManager.getDtProject(project);
             if (dtProject == null)
             {
                 Activator.logInfo("Not a DtProject, skipping DD wait: " + project.getName()); //$NON-NLS-1$
-                return;
+                return true;
             }
             
             // Get DerivedDataManager for the project
@@ -139,7 +139,7 @@ public final class BuildUtils
             if (ddManager == null)
             {
                 Activator.logInfo("IDerivedDataManager not available for project: " + project.getName()); //$NON-NLS-1$
-                return;
+                return true;
             }
             
             // Wait for all derived data computations
@@ -154,10 +154,12 @@ public final class BuildUtils
             {
                 Activator.logInfo("Derived data wait timed out for: " + project.getName()); //$NON-NLS-1$
             }
+            return completed;
         }
         catch (Exception e)
         {
             Activator.logError("Error waiting for derived data", e); //$NON-NLS-1$
+            return false;
         }
     }
 }

@@ -8,6 +8,8 @@ package com.ditrix.edt.mcp.server.tools;
 
 import java.util.Map;
 
+import com.ditrix.edt.mcp.server.tasks.TaskSchedulingKey;
+
 /**
  * Interface for MCP tool implementations.
  * Each tool provides a specific capability to MCP clients.
@@ -100,6 +102,31 @@ public interface IMcpTool
     default TaskSupport getTaskSupport()
     {
         return TaskSupport.FORBIDDEN;
+    }
+
+    /**
+     * Validates whether the current request may use task augmentation.
+     *
+     * @param params request arguments
+     * @return null when task augmentation is allowed, otherwise an actionable error message
+     */
+    default String validateTaskRequest(Map<String, String> params)
+    {
+        return null;
+    }
+
+    /**
+     * Returns the mutable scheduling scope for task-backed execution.
+     *
+     * <p>Only mutable long-running tools should return a non-empty scope. The scheduler uses this
+     * scope to reject unsafe overlapping execution.
+     *
+     * @param params request arguments
+     * @return scheduling key for this task request
+     */
+    default TaskSchedulingKey getTaskSchedulingKey(Map<String, String> params)
+    {
+        return TaskSchedulingKey.none();
     }
     
     /**

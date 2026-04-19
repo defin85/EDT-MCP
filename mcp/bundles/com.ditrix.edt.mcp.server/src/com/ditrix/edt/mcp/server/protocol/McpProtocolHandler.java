@@ -15,6 +15,7 @@ import com.ditrix.edt.mcp.server.Activator;
 import com.ditrix.edt.mcp.server.McpServer;
 import com.ditrix.edt.mcp.server.UserSignal;
 import com.ditrix.edt.mcp.server.preferences.PreferenceConstants;
+import com.ditrix.edt.mcp.server.progress.OperationProgressState;
 import com.ditrix.edt.mcp.server.progress.ToolExecutionContext;
 import com.ditrix.edt.mcp.server.progress.ToolExecutionContextHolder;
 import com.ditrix.edt.mcp.server.protocol.jsonrpc.InitializeResult;
@@ -31,9 +32,9 @@ import com.ditrix.edt.mcp.server.tasks.TaskExecutionHandle;
 import com.ditrix.edt.mcp.server.tasks.TaskRecord;
 import com.ditrix.edt.mcp.server.tasks.TaskRegistry;
 import com.ditrix.edt.mcp.server.tasks.TaskResultEnvelope;
+import com.ditrix.edt.mcp.server.tasks.TaskSchedulingKey;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.tools.McpToolRegistry;
-import com.ditrix.edt.mcp.server.tools.impl.UpdateDatabaseTool;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -184,20 +185,26 @@ public class McpProtocolHandler
         }
         
         Activator.logInfo("Processing tools/call: " + tool.getName()); //$NON-NLS-1$
+        Map<String, String> params = extractToolParams(request);
 
         if (request != null && request.hasTask())
         {
             if (IMcpTool.TaskSupport.FORBIDDEN.equals(tool.getTaskSupport()))
             {
-                return buildErrorResponse(McpConstants.ERROR_METHOD_NOT_FOUND,
+                return buildErrorResponse(McpConstants.ERROR_INVALID_PARAMS,
                         "Tool does not support task-augmented execution: " + tool.getName(), requestId); //$NON-NLS-1$
             }
-            return handleTaskAugmentedToolCall(tool, request, requestId, sessionId, acceptsSse, transportMode);
+            String validationError = tool.validateTaskRequest(params);
+            if (validationError != null)
+            {
+                return buildErrorResponse(McpConstants.ERROR_INVALID_PARAMS, validationError, requestId);
+            }
+            return handleTaskAugmentedToolCall(tool, params, request, requestId, sessionId, acceptsSse, transportMode);
         }
 
         if (IMcpTool.TaskSupport.REQUIRED.equals(tool.getTaskSupport()))
         {
-            return buildErrorResponse(McpConstants.ERROR_METHOD_NOT_FOUND,
+            return buildErrorResponse(McpConstants.ERROR_INVALID_PARAMS,
                     "Tool must be invoked with task augmentation: " + tool.getName(), requestId); //$NON-NLS-1$
         }
 
@@ -400,7 +407,8 @@ public class McpProtocolHandler
                     resultEnvelope.getError().getMessage()));
         }
 
-        JsonElement payload = attachRelatedTaskMeta(resultEnvelope.getResult(), task.getTaskId());
+        McpServer server = Activator.getDefault() != null ? Activator.getDefault().getMcpServer() : null;
+        JsonElement payload = attachTaskResultMeta(resultEnvelope.getResult(), task.getTaskId(), server);
         return GsonProvider.toJson(JsonRpcResponse.success(requestId, payload));
     }
 
@@ -425,7 +433,7 @@ public class McpProtocolHandler
 
         IMcpTool tool = toolRegistry.getTool(task.getToolName());
         TaskResultEnvelope cancelledEnvelope = tool != null
-                ? TaskResultEnvelope.success(createCancelledToolPayload(tool, Map.of()))
+                ? TaskResultEnvelope.success(createCancelledTaskPayload(tool, task))
                 : TaskResultEnvelope.error(new JsonRpcError(McpConstants.ERROR_INTERNAL, "Task was cancelled")); //$NON-NLS-1$
         TaskRecord cancelledTask = server.getTaskRegistry().cancelTask(task.getTaskId(), sessionId, cancelledEnvelope,
                 "Task cancellation requested."); //$NON-NLS-1$
@@ -436,8 +444,8 @@ public class McpProtocolHandler
         return GsonProvider.toJson(JsonRpcResponse.success(requestId, new TaskInfo(cancelledTask)));
     }
 
-    private String handleTaskAugmentedToolCall(IMcpTool tool, JsonRpcRequest request, Object requestId, String sessionId,
-            boolean acceptsSse, String transportMode)
+    private String handleTaskAugmentedToolCall(IMcpTool tool, Map<String, String> params, JsonRpcRequest request,
+            Object requestId, String sessionId, boolean acceptsSse, String transportMode)
     {
         McpServer server = Activator.getDefault() != null ? Activator.getDefault().getMcpServer() : null;
         if (server == null)
@@ -445,17 +453,17 @@ public class McpProtocolHandler
             return buildErrorResponse(McpConstants.ERROR_INTERNAL, "MCP server is not available", requestId); //$NON-NLS-1$
         }
 
-        Map<String, String> params = extractToolParams(request);
         String projectName = params.get("projectName"); //$NON-NLS-1$
-        if (UpdateDatabaseTool.NAME.equals(tool.getName())
-                && server.getTaskRegistry().hasRunningTask(tool.getName(), projectName))
+        TaskSchedulingKey schedulingKey = tool.getTaskSchedulingKey(params);
+        TaskRecord conflictingTask = server.getTaskRegistry().findConflictingTask(schedulingKey);
+        if (conflictingTask != null)
         {
             return buildErrorResponse(McpConstants.ERROR_INVALID_PARAMS,
-                    "Conflicting task is already running for this project", requestId); //$NON-NLS-1$
+                    buildConflictingTaskMessage(conflictingTask), requestId);
         }
 
         TaskRecord task = server.getTaskRegistry().createToolTask(requestId != null ? requestId.toString() : null,
-                sessionId, tool.getName(), request != null ? request.getTaskTtl() : null, projectName);
+                sessionId, tool.getName(), request != null ? request.getTaskTtl() : null, projectName, schedulingKey);
         TaskCancellationToken cancellationToken = new TaskCancellationToken();
         TaskExecutionHandle executionHandle = new TaskExecutionHandle(cancellationToken);
         task.setExecutionHandle(executionHandle);
@@ -505,6 +513,13 @@ public class McpProtocolHandler
         }
         else
         {
+            String toolFailureMessage = extractToolFailureMessage(outcome.getResult());
+            if (toolFailureMessage != null)
+            {
+                registry.markFailed(task.getTaskId(), TaskResultEnvelope.success(outcome.getResult()),
+                        toolFailureMessage);
+                return;
+            }
             String completionMessage = task.getProgressState() != null && task.getProgressState().getMessage() != null
                     ? task.getProgressState().getMessage() : "Task completed"; //$NON-NLS-1$
             registry.markCompleted(task.getTaskId(), TaskResultEnvelope.success(outcome.getResult()), completionMessage);
@@ -524,6 +539,22 @@ public class McpProtocolHandler
             return null;
         }
         return server.getTaskRegistry().getTask(taskId, sessionId);
+    }
+
+    private String buildConflictingTaskMessage(TaskRecord conflictingTask)
+    {
+        StringBuilder message = new StringBuilder("Conflicting mutable task is already running: "); //$NON-NLS-1$
+        message.append(conflictingTask.getToolName());
+        if (conflictingTask.getProjectName() != null && !conflictingTask.getProjectName().isBlank())
+        {
+            message.append(" for project ").append(conflictingTask.getProjectName()); //$NON-NLS-1$
+        }
+        else if (conflictingTask.getSchedulingKey().isWorkspaceWide())
+        {
+            message.append(" for the entire workspace"); //$NON-NLS-1$
+        }
+        message.append(" (taskId=").append(conflictingTask.getTaskId()).append(")"); //$NON-NLS-1$ //$NON-NLS-2$
+        return message.toString();
     }
     
     private JsonElement buildToolCallTextPayload(String result)
@@ -558,32 +589,41 @@ public class McpProtocolHandler
             server.setCurrentToolName(tool.getName());
         }
 
+        ToolExecutionContext context = createToolExecutionContext(request, requestId, tool.getName(), sessionId,
+                acceptsSse, transportMode, operationId, cancellationToken);
         String result;
         try
         {
-            ToolExecutionContextHolder.set(createToolExecutionContext(request, requestId, tool.getName(), sessionId,
-                    acceptsSse, transportMode, operationId, cancellationToken));
+            ToolExecutionContextHolder.set(context);
             result = tool.execute(params);
         }
         catch (RuntimeException e)
         {
             Activator.logError("Error executing tool: " + tool.getName(), e); //$NON-NLS-1$
+            ToolExecutionContextHolder.clear();
             return ToolExecutionOutcome.error(new JsonRpcError(McpConstants.ERROR_INTERNAL, e.getMessage()));
         }
         finally
         {
-            ToolExecutionContextHolder.clear();
             if (updateCurrentTool && server != null)
             {
                 server.setCurrentToolName(null);
             }
         }
 
-        UserSignal signal = consumeUserSignal && server != null ? server.consumeUserSignal() : null;
-        boolean plainTextMode = Activator.getDefault().getPreferenceStore()
-            .getBoolean(PreferenceConstants.PREF_PLAIN_TEXT_MODE);
-        JsonElement payload = buildToolCallPayload(tool, params, result, signal, plainTextMode);
-        return ToolExecutionOutcome.success(payload);
+        try
+        {
+            UserSignal signal = consumeUserSignal && server != null ? server.consumeUserSignal() : null;
+            boolean plainTextMode = Activator.getDefault().getPreferenceStore()
+                .getBoolean(PreferenceConstants.PREF_PLAIN_TEXT_MODE);
+            JsonElement payload = buildToolCallPayload(tool, params, result, signal, plainTextMode);
+            payload = attachDetachedContinuationMeta(payload, context != null ? context.getOperationId() : null, server);
+            return ToolExecutionOutcome.success(payload);
+        }
+        finally
+        {
+            ToolExecutionContextHolder.clear();
+        }
     }
 
     private JsonElement buildToolCallPayload(IMcpTool tool, Map<String, String> params, String result, UserSignal signal,
@@ -652,7 +692,21 @@ public class McpProtocolHandler
         return GsonProvider.toJson(JsonRpcResponse.success(requestId, outcome.getResult()));
     }
 
-    private JsonElement attachRelatedTaskMeta(JsonElement payload, String taskId)
+    static JsonElement attachTaskResultMeta(JsonElement payload, String taskId, McpServer server)
+    {
+        JsonElement withDetachedContinuation = payload;
+        if (server != null && hasText(taskId))
+        {
+            OperationProgressState snapshot = server.getOperationSnapshot(taskId);
+            if (snapshot != null && snapshot.isDetached())
+            {
+                withDetachedContinuation = DetachedContinuationMeta.attach(withDetachedContinuation, taskId);
+            }
+        }
+        return attachRelatedTaskMeta(withDetachedContinuation, taskId);
+    }
+
+    private static JsonElement attachRelatedTaskMeta(JsonElement payload, String taskId)
     {
         if (payload == null || !payload.isJsonObject())
         {
@@ -666,6 +720,88 @@ public class McpProtocolHandler
         meta.add(McpConstants.META_RELATED_TASK, relatedTask);
         copy.add("_meta", meta); //$NON-NLS-1$
         return copy;
+    }
+
+    private JsonElement attachDetachedContinuationMeta(JsonElement payload, String operationId, McpServer server)
+    {
+        if (server == null || !hasText(operationId))
+        {
+            return payload;
+        }
+        OperationProgressState snapshot = server.getOperationSnapshot(operationId);
+        if (snapshot == null || !snapshot.isDetached())
+        {
+            return payload;
+        }
+        return DetachedContinuationMeta.attach(payload, operationId);
+    }
+
+    private JsonElement createCancelledTaskPayload(IMcpTool tool, TaskRecord task)
+    {
+        JsonElement payload = createCancelledToolPayload(tool, Map.of());
+        if (task == null || task.getProgressState() == null)
+        {
+            return payload;
+        }
+        OperationProgressState progressState = task.getProgressState();
+        if (!DetachedContinuationMeta.shouldExposeForCancellation(task.getToolName(), progressState))
+        {
+            return payload;
+        }
+        return DetachedContinuationMeta.attach(payload, task.getTaskId());
+    }
+
+    static String extractToolFailureMessage(JsonElement payload)
+    {
+        if (payload == null || !payload.isJsonObject())
+        {
+            return null;
+        }
+
+        JsonObject payloadObject = payload.getAsJsonObject();
+        JsonElement structuredContent = payloadObject.get("structuredContent"); //$NON-NLS-1$
+        if (structuredContent == null || !structuredContent.isJsonObject())
+        {
+            return null;
+        }
+
+        JsonObject structuredObject = structuredContent.getAsJsonObject();
+        if (structuredObject.has("success") && structuredObject.get("success").isJsonPrimitive() //$NON-NLS-1$
+                && structuredObject.get("success").getAsJsonPrimitive().isBoolean() //$NON-NLS-1$
+                && !structuredObject.get("success").getAsBoolean()) //$NON-NLS-1$
+        {
+            String message = extractErrorMessage(structuredObject.get("error")); //$NON-NLS-1$
+            return hasText(message) ? message : "Tool execution failed"; //$NON-NLS-1$
+        }
+
+        return null;
+    }
+
+    private static String extractErrorMessage(JsonElement errorElement)
+    {
+        if (errorElement == null || errorElement.isJsonNull())
+        {
+            return null;
+        }
+        if (errorElement.isJsonPrimitive())
+        {
+            return errorElement.getAsString();
+        }
+        if (errorElement.isJsonObject())
+        {
+            JsonObject errorObject = errorElement.getAsJsonObject();
+            JsonElement messageElement = errorObject.get("message"); //$NON-NLS-1$
+            if (messageElement != null && messageElement.isJsonPrimitive())
+            {
+                return messageElement.getAsString();
+            }
+        }
+        return errorElement.toString();
+    }
+
+    private static boolean hasText(String value)
+    {
+        return value != null && !value.isBlank();
     }
 
     /**

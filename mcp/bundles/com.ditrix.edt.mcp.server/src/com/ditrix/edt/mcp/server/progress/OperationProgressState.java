@@ -8,6 +8,7 @@ package com.ditrix.edt.mcp.server.progress;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Immutable snapshot of a long-running operation progress.
@@ -33,11 +34,14 @@ public final class OperationProgressState
     private final String requestId;
     private final String sessionId;
     private final Object progressToken;
+    private final boolean detached;
+    private final Map<String, Object> details;
     private final List<ProgressEvent> recentEvents;
 
     public OperationProgressState(String operationId, String toolName, String stage, String message, Double progress,
             Double total, boolean indeterminate, String status, Instant startedAt, Instant lastUpdateAt,
-            long elapsedSeconds, String requestId, String sessionId, Object progressToken,
+            long elapsedSeconds, String requestId, String sessionId, Object progressToken, boolean detached,
+            Map<String, Object> details,
             List<ProgressEvent> recentEvents)
     {
         this.operationId = operationId;
@@ -54,6 +58,8 @@ public final class OperationProgressState
         this.requestId = requestId;
         this.sessionId = sessionId;
         this.progressToken = progressToken;
+        this.detached = detached;
+        this.details = details != null ? Map.copyOf(details) : Map.of();
         this.recentEvents = recentEvents != null ? List.copyOf(recentEvents) : List.of();
     }
 
@@ -125,6 +131,16 @@ public final class OperationProgressState
     public Object getProgressToken()
     {
         return progressToken;
+    }
+
+    public boolean isDetached()
+    {
+        return detached;
+    }
+
+    public Map<String, Object> getDetails()
+    {
+        return details;
     }
 
     public List<ProgressEvent> getRecentEvents()

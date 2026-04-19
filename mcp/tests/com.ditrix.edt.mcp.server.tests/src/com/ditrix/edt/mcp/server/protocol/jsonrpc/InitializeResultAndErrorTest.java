@@ -46,6 +46,12 @@ public class InitializeResultAndErrorTest
     {
         InitializeResult result = new InitializeResult("v1", "s", "1.0", "a");
         assertNotNull(result.getCapabilities().getTools());
+        assertNotNull(result.getCapabilities().getTasks());
+        assertNotNull(result.getCapabilities().getTasks().getList());
+        assertNotNull(result.getCapabilities().getTasks().getCancel());
+        assertNotNull(result.getCapabilities().getTasks().getRequests());
+        assertNotNull(result.getCapabilities().getTasks().getRequests().getTools());
+        assertNotNull(result.getCapabilities().getTasks().getRequests().getTools().getCall());
     }
 
     @Test
@@ -66,6 +72,7 @@ public class InitializeResultAndErrorTest
         assertEquals("Test", info.get("name").getAsString());
         assertEquals("1.0", info.get("version").getAsString());
         assertEquals("Author", info.get("author").getAsString());
+        assertNotNull(parsed.getAsJsonObject("capabilities").getAsJsonObject("tasks"));
     }
 
     @Test

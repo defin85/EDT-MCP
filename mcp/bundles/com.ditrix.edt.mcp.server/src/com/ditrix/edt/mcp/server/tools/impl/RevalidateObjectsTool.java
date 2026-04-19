@@ -19,7 +19,6 @@ import org.eclipse.core.resources.IncrementalProjectBuilder;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
-import org.eclipse.core.runtime.NullProgressMonitor;
 
 import com._1c.g5.v8.bm.core.IBmObject;
 import com._1c.g5.v8.bm.core.IBmTransaction;
@@ -29,9 +28,17 @@ import com._1c.g5.v8.dt.core.platform.IBmModelManager;
 import com._1c.g5.v8.dt.core.platform.IDtProject;
 import com._1c.g5.v8.dt.core.platform.IDtProjectManager;
 import com.ditrix.edt.mcp.server.Activator;
+import com.ditrix.edt.mcp.server.McpServer;
+import com.ditrix.edt.mcp.server.progress.CapturingProgressMonitor;
+import com.ditrix.edt.mcp.server.progress.DerivedDataDetachedTracker;
+import com.ditrix.edt.mcp.server.progress.OperationProgressReporter;
+import com.ditrix.edt.mcp.server.progress.ToolExecutionContext;
+import com.ditrix.edt.mcp.server.progress.ToolExecutionContextHolder;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
+import com.ditrix.edt.mcp.server.tasks.TaskCancellationToken;
+import com.ditrix.edt.mcp.server.tasks.TaskSchedulingKey;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.BuildUtils;
 import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
@@ -53,13 +60,22 @@ import com.google.gson.JsonParser;
 public class RevalidateObjectsTool implements IMcpTool
 {
     public static final String NAME = "revalidate_objects"; //$NON-NLS-1$
-    
+
+    private static final String STAGE_VALIDATION = "validation"; //$NON-NLS-1$
+    private static final String STAGE_REFRESH = "refresh"; //$NON-NLS-1$
+    private static final String STAGE_FULL_REVALIDATION = "full_revalidation"; //$NON-NLS-1$
+    private static final String STAGE_OBJECT_LOOKUP = "object_lookup"; //$NON-NLS-1$
+    private static final String STAGE_OBJECT_VALIDATION = "object_validation"; //$NON-NLS-1$
+    private static final String STAGE_WAITING_FOR_BUILD = "waiting_for_build"; //$NON-NLS-1$
+    private static final String STAGE_COMPLETION = "completion"; //$NON-NLS-1$
+    private static final String STAGE_FAILURE = "failure"; //$NON-NLS-1$
+
     @Override
     public String getName()
     {
         return NAME;
     }
-    
+
     @Override
     public String getDescription()
     {
@@ -68,7 +84,7 @@ public class RevalidateObjectsTool implements IMcpTool
                "FQN examples: 'Document.SalesOrder', 'Catalog.Products', 'CommonModule.Common'. " + //$NON-NLS-1$
                "Russian type names are also supported (e.g. 'Документ.ПриходнаяНакладная', 'Справочник.Номенклатура')."; //$NON-NLS-1$
     }
-    
+
     @Override
     public String getInputSchema()
     {
@@ -77,19 +93,47 @@ public class RevalidateObjectsTool implements IMcpTool
             .stringArrayProperty("objects", "FQNs to revalidate (e.g. ['Document.SalesOrder']). Russian type names supported (e.g. 'Документ.ПродажаТоваров'). Empty array = full project revalidation") //$NON-NLS-1$ //$NON-NLS-2$
             .build();
     }
-    
+
     @Override
     public ResponseType getResponseType()
     {
         return ResponseType.JSON;
     }
-    
+
+    @Override
+    public TaskSupport getTaskSupport()
+    {
+        return TaskSupport.OPTIONAL;
+    }
+
+    @Override
+    public String validateTaskRequest(Map<String, String> params)
+    {
+        List<String> objects = parseObjectsList(JsonUtils.extractStringArgument(params, "objects")); //$NON-NLS-1$
+        if (!objects.isEmpty())
+        {
+            return "Task augmentation is supported only for full project revalidation. Omit the objects array or pass an empty array."; //$NON-NLS-1$
+        }
+        return null;
+    }
+
+    @Override
+    public TaskSchedulingKey getTaskSchedulingKey(Map<String, String> params)
+    {
+        List<String> objects = parseObjectsList(JsonUtils.extractStringArgument(params, "objects")); //$NON-NLS-1$
+        if (!objects.isEmpty())
+        {
+            return TaskSchedulingKey.none();
+        }
+        return TaskSchedulingKey.projectScoped(JsonUtils.extractStringArgument(params, "projectName")); //$NON-NLS-1$
+    }
+
     @Override
     public String execute(Map<String, String> params)
     {
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String objectsJson = JsonUtils.extractStringArgument(params, "objects"); //$NON-NLS-1$
-        
+
         // Check if project is ready for operations
         if (projectName != null && !projectName.isEmpty())
         {
@@ -99,26 +143,25 @@ public class RevalidateObjectsTool implements IMcpTool
                 return ToolResult.error(notReadyError).toJson();
             }
         }
-        
+
         List<String> objects = parseObjectsList(objectsJson);
-        
         return revalidateObjects(projectName, objects);
     }
-    
+
     /**
      * Parses the objects array from JSON string using Gson JsonParser.
-     * 
+     *
      * @param objectsJson JSON array string like ["obj1", "obj2"]
      * @return list of object FQNs
      */
-    private List<String> parseObjectsList(String objectsJson)
+    private static List<String> parseObjectsList(String objectsJson)
     {
         List<String> result = new ArrayList<>();
         if (objectsJson == null || objectsJson.isEmpty())
         {
             return result;
         }
-        
+
         try
         {
             JsonElement element = JsonParser.parseString(objectsJson);
@@ -140,123 +183,162 @@ public class RevalidateObjectsTool implements IMcpTool
         }
         return result;
     }
-    
+
     /**
      * Revalidates specific objects in a project or full project.
-     * 
+     *
      * @param projectName name of the project
      * @param objectFqns list of object FQNs to revalidate (empty for full project)
      * @return JSON string with result
      */
-    public static String revalidateObjects(String projectName, List<String> objectFqns)
+    private String revalidateObjects(String projectName, List<String> objectFqns)
     {
-        // Validate parameters
         if (projectName == null || projectName.isEmpty())
         {
             return ToolResult.error("projectName is required").toJson(); //$NON-NLS-1$
         }
-        
-        // Empty objects list = full project revalidation
-        boolean fullProjectRevalidation = (objectFqns == null || objectFqns.isEmpty());
-        
+
+        boolean fullProjectRevalidation = objectFqns == null || objectFqns.isEmpty();
+        McpServer server = Activator.getDefault() != null ? Activator.getDefault().getMcpServer() : null;
+        ToolExecutionContext context = ToolExecutionContextHolder.get();
+        OperationProgressReporter reporter = createProgressReporter(context, projectName, fullProjectRevalidation,
+                objectFqns);
+        CapturingProgressMonitor monitor = new CapturingProgressMonitor(reporter);
+        TaskCancellationToken cancellationToken = context != null ? context.getCancellationToken() : null;
+        IProject project = null;
+        boolean buildTriggered = false;
+        boolean detachedHandoff = false;
+        registerActiveOperation(server, reporter, context);
+
         try
         {
             IWorkspace workspace = ResourcesPlugin.getWorkspace();
-            IProgressMonitor monitor = new NullProgressMonitor();
-            
+
             // Find project
-            IProject project = workspace.getRoot().getProject(projectName);
+            project = workspace.getRoot().getProject(projectName);
             if (project == null || !project.exists())
             {
                 return ToolResult.error("Project not found: " + projectName).toJson(); //$NON-NLS-1$
             }
-            
+
             if (!project.isOpen())
             {
                 return ToolResult.error("Project is closed: " + projectName).toJson(); //$NON-NLS-1$
             }
-            
+
             // Refresh from disk
+            reporter.stage(STAGE_REFRESH, "Refreshing project from disk"); //$NON-NLS-1$
             project.refreshLocal(IResource.DEPTH_INFINITE, monitor);
-            
+            if (isCancellationRequested(cancellationToken, monitor))
+            {
+                return cancelled(reporter);
+            }
+
             if (fullProjectRevalidation)
             {
-                // Full project revalidation - use INCREMENTAL_BUILD
+                reporter.stage(STAGE_FULL_REVALIDATION, "Triggering full project revalidation"); //$NON-NLS-1$
                 Activator.logInfo("Revalidating entire project: " + project.getName()); //$NON-NLS-1$
                 project.build(IncrementalProjectBuilder.INCREMENTAL_BUILD, monitor);
-                
-                // Wait for build jobs and derived data to complete
+                buildTriggered = true;
+
+                reporter.indeterminate(STAGE_WAITING_FOR_BUILD, "Waiting for build and derived data"); //$NON-NLS-1$
                 BuildUtils.waitForBuildAndDerivedData(project, monitor);
-                
+                if (isCancellationRequested(cancellationToken, monitor))
+                {
+                    return cancelled(reporter);
+                }
+
+                String message = "Full project revalidation completed"; //$NON-NLS-1$
+                reporter.stage(STAGE_COMPLETION, message);
+                reporter.completed(message);
                 return ToolResult.success()
                     .put("project", projectName) //$NON-NLS-1$
                     .put("mode", "full") //$NON-NLS-1$ //$NON-NLS-2$
-                    .put("message", "Full project revalidation completed") //$NON-NLS-1$ //$NON-NLS-2$
+                    .put("message", message) //$NON-NLS-1$
                     .toJson();
             }
-            else
-            {
-                // Partial revalidation - find objects and schedule validation
-                return revalidateSpecificObjects(project, objectFqns, monitor);
-            }
+
+            return revalidateSpecificObjects(project, objectFqns, monitor, reporter, cancellationToken);
         }
         catch (Exception e)
         {
             Activator.logError("Error during project revalidation", e); //$NON-NLS-1$
+            reporter.stage(STAGE_FAILURE, "Project revalidation failed"); //$NON-NLS-1$
+            reporter.failed("Project revalidation failed: " + e.getMessage(), e); //$NON-NLS-1$
             return ToolResult.error(e.getMessage()).toJson();
         }
+        finally
+        {
+            if (!detachedHandoff && fullProjectRevalidation && buildTriggered && isCancellationRequested(cancellationToken, monitor)
+                    && project != null)
+            {
+                detachedHandoff = DerivedDataDetachedTracker.handoff(server, reporter, List.of(project));
+            }
+            if (!detachedHandoff)
+            {
+                clearActiveOperation(server, context);
+            }
+        }
     }
-    
+
     /**
      * Revalidates specific objects using ICheckScheduler.
-     * 
+     *
      * @param project the IProject to work with
      * @param objectFqns list of object FQNs to revalidate
      * @param monitor progress monitor
+     * @param reporter task/sync progress reporter
+     * @param cancellationToken cancellation token for task-backed execution
      * @return JSON string with result
      * @throws CoreException on error
      */
-    private static String revalidateSpecificObjects(IProject project, List<String> objectFqns, 
-            IProgressMonitor monitor) throws CoreException
+    private String revalidateSpecificObjects(IProject project, List<String> objectFqns, IProgressMonitor monitor,
+            OperationProgressReporter reporter, TaskCancellationToken cancellationToken) throws CoreException
     {
         String projectName = project.getName();
-        
+        reporter.stage(STAGE_OBJECT_LOOKUP, "Resolving requested objects for validation"); //$NON-NLS-1$
+
         // Get services from Activator
         IBmModelManager bmModelManager = Activator.getDefault().getBmModelManager();
         ICheckScheduler checkScheduler = Activator.getDefault().getCheckScheduler();
-        
+
         if (bmModelManager == null)
         {
             return ToolResult.error("IBmModelManager service is not available").toJson(); //$NON-NLS-1$
         }
-        
+
         if (checkScheduler == null)
         {
             return ToolResult.error("ICheckScheduler service is not available").toJson(); //$NON-NLS-1$
         }
-        
+
         // Get DtProject
         IDtProjectManager dtProjectManager = Activator.getDefault().getDtProjectManager();
         IDtProject dtProject = dtProjectManager != null ? dtProjectManager.getDtProject(project) : null;
-        
+
         if (dtProject == null)
         {
             return ToolResult.error("Not an EDT project: " + projectName).toJson(); //$NON-NLS-1$
         }
-        
+
         // Get BM model
         IBmModel bmModel = bmModelManager.getModel(dtProject);
         if (bmModel == null)
         {
             return ToolResult.error("BM model not available for project: " + projectName).toJson(); //$NON-NLS-1$
         }
-        
+
+        if (isCancellationRequested(cancellationToken, monitor))
+        {
+            return cancelled(reporter);
+        }
+
         // Find objects by FQN using executeReadonlyTask
         List<String> found = new ArrayList<>();
         List<String> notFound = new ArrayList<>();
         List<String> skippedNullUri = new ArrayList<>();
         Collection<Object> objectsToValidate = new ArrayList<>();
-        
+
         // Normalize FQNs to English singular form (supports Russian type names),
         // but keep the original user input for result reporting
         List<String> originalFqns = new ArrayList<>(objectFqns);
@@ -279,7 +361,6 @@ public class RevalidateObjectsTool implements IMcpTool
                     IBmObject obj = tx.getTopObjectByFqn(normalizedFqn);
                     if (obj != null)
                     {
-                        // Use bmGetId() - returns Long which is accepted by scheduleValidation
                         long bmId = obj.bmGetId();
                         if (bmId > 0)
                         {
@@ -289,7 +370,6 @@ public class RevalidateObjectsTool implements IMcpTool
                         }
                         else
                         {
-                            // Object found but has invalid ID (transient object)
                             Activator.logInfo("Object has invalid bmId: " + originalFqn + " -> " + bmId); //$NON-NLS-1$ //$NON-NLS-2$
                             skippedNullUri.add(originalFqn);
                         }
@@ -303,11 +383,15 @@ public class RevalidateObjectsTool implements IMcpTool
                 return null;
             }
         });
-        
-        // Schedule validation if we found objects
+
+        if (isCancellationRequested(cancellationToken, monitor))
+        {
+            return cancelled(reporter);
+        }
+
         if (!objectsToValidate.isEmpty())
         {
-            // Filter out any null values (shouldn't happen but defensive coding)
+            reporter.stage(STAGE_OBJECT_VALIDATION, "Scheduling validation for selected objects"); //$NON-NLS-1$
             Collection<Object> validObjects = new ArrayList<>();
             for (Object obj : objectsToValidate)
             {
@@ -316,38 +400,95 @@ public class RevalidateObjectsTool implements IMcpTool
                     validObjects.add(obj);
                 }
             }
-            
+
             if (!validObjects.isEmpty())
             {
                 // Use 4-parameter version without IBmTransaction
                 // Use empty set for checkIds = validate with all checks
-                checkScheduler.scheduleValidation(project, Collections.emptySet(), 
-                        validObjects, monitor);
+                checkScheduler.scheduleValidation(project, Collections.emptySet(), validObjects, monitor);
             }
         }
-        
-        // Wait for build jobs and derived data to complete
+
+        reporter.indeterminate(STAGE_WAITING_FOR_BUILD, "Waiting for validation results"); //$NON-NLS-1$
         BuildUtils.waitForBuildAndDerivedData(project, monitor);
-        
-        // Build result using ToolResult
+        if (isCancellationRequested(cancellationToken, monitor))
+        {
+            return cancelled(reporter);
+        }
+
+        String message = "Revalidation completed"; //$NON-NLS-1$
+        reporter.stage(STAGE_COMPLETION, message);
+        reporter.completed(message);
+
         ToolResult result = ToolResult.success()
             .put("project", projectName) //$NON-NLS-1$
             .put("mode", "objects") //$NON-NLS-1$ //$NON-NLS-2$
             .put("objectsRequested", objectFqns.size()) //$NON-NLS-1$
             .put("objectsFound", found.size()) //$NON-NLS-1$
             .put("objectsValidated", found) //$NON-NLS-1$
-            .put("message", "Revalidation completed"); //$NON-NLS-1$ //$NON-NLS-2$
-        
+            .put("message", message); //$NON-NLS-1$
+
         if (!notFound.isEmpty())
         {
             result.put("objectsNotFound", notFound); //$NON-NLS-1$
         }
-        
+
         if (!skippedNullUri.isEmpty())
         {
             result.put("objectsSkippedNullUri", skippedNullUri); //$NON-NLS-1$
         }
-        
+
         return result.toJson();
+    }
+
+    private OperationProgressReporter createProgressReporter(ToolExecutionContext context, String projectName,
+            boolean fullProjectRevalidation, List<String> objectFqns)
+    {
+        OperationProgressReporter reporter = new OperationProgressReporter();
+        String mode = fullProjectRevalidation ? "full project" : "selected objects"; //$NON-NLS-1$ //$NON-NLS-2$
+        String detail = fullProjectRevalidation ? projectName : projectName + " (" + objectFqns.size() + " objects)"; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+        reporter.start(context != null ? context.getOperationId() : null, NAME, STAGE_VALIDATION,
+                "Preparing " + mode + " revalidation for " + detail, context != null ? context.getRequestId() : null, //$NON-NLS-1$ //$NON-NLS-2$
+                context != null ? context.getSessionId() : null, context != null ? context.getProgressToken() : null);
+        return reporter;
+    }
+
+    private void registerActiveOperation(McpServer server, OperationProgressReporter reporter, ToolExecutionContext context)
+    {
+        if (server == null)
+        {
+            return;
+        }
+        if (context != null && context.getOperationId() != null)
+        {
+            reporter.appendStateListener(state -> server.getTaskRegistry().updateProgress(context.getOperationId(), state));
+        }
+        server.setActiveOperation(reporter);
+    }
+
+    private void clearActiveOperation(McpServer server, ToolExecutionContext context)
+    {
+        if (server != null)
+        {
+            server.clearActiveOperation(context != null ? context.getOperationId() : null);
+        }
+    }
+
+    private boolean isCancellationRequested(TaskCancellationToken cancellationToken, IProgressMonitor monitor)
+    {
+        boolean cancelled = cancellationToken != null && cancellationToken.isCancellationRequested();
+        if (cancelled)
+        {
+            monitor.setCanceled(true);
+        }
+        return cancelled || monitor.isCanceled() || Thread.currentThread().isInterrupted();
+    }
+
+    private String cancelled(OperationProgressReporter reporter)
+    {
+        String message = "Project revalidation cancelled"; //$NON-NLS-1$
+        reporter.stage(STAGE_FAILURE, message);
+        reporter.cancelled(message);
+        return ToolResult.error(message).toJson();
     }
 }

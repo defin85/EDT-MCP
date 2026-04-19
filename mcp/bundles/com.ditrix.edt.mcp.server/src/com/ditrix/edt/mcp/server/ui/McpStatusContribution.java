@@ -639,7 +639,7 @@ public class McpStatusContribution extends WorkbenchWindowControlContribution
     {
         String toolName = safe(operation.getToolName(), "operation"); //$NON-NLS-1$
         String stage = humanize(operation.getStage());
-        String label = "MCP: " + toolName; //$NON-NLS-1$
+        String label = operation.isDetached() ? "MCP detached: " + toolName : "MCP: " + toolName; //$NON-NLS-1$ //$NON-NLS-2$
         if (hasText(stage))
         {
             String withStage = label + " - " + stage; //$NON-NLS-1$
@@ -675,10 +675,12 @@ public class McpStatusContribution extends WorkbenchWindowControlContribution
     private String buildOperationTooltip(OperationProgressState operation, int port, long requestCount)
     {
         StringBuilder tooltip = new StringBuilder();
-        tooltip.append("MCP Server: Executing ").append(safe(operation.getToolName(), "operation")); //$NON-NLS-1$ //$NON-NLS-2$
+        tooltip.append(operation.isDetached() ? "MCP Server: Detached continuation " : "MCP Server: Executing ") //$NON-NLS-1$ //$NON-NLS-2$
+                .append(safe(operation.getToolName(), "operation")); //$NON-NLS-1$
         tooltip.append("\nPort: ").append(port); //$NON-NLS-1$
         tooltip.append("\nRequests: ").append(requestCount); //$NON-NLS-1$
         tooltip.append("\nStatus: ").append(safe(operation.getStatus(), "UNKNOWN")); //$NON-NLS-1$ //$NON-NLS-2$
+        tooltip.append("\nDetached: ").append(operation.isDetached() ? "yes" : "no"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
         if (hasText(operation.getStage()))
         {
             tooltip.append("\nStage: ").append(humanize(operation.getStage())); //$NON-NLS-1$
@@ -686,6 +688,10 @@ public class McpStatusContribution extends WorkbenchWindowControlContribution
         if (hasText(operation.getMessage()))
         {
             tooltip.append("\nMessage: ").append(operation.getMessage()); //$NON-NLS-1$
+        }
+        if (!operation.getDetails().isEmpty())
+        {
+            appendDetails(tooltip, operation.getDetails());
         }
         if (!operation.isIndeterminate() && operation.getProgress() != null && operation.getTotal() != null)
         {
@@ -703,6 +709,30 @@ public class McpStatusContribution extends WorkbenchWindowControlContribution
 
         appendRecentEvents(tooltip, operation.getRecentEvents());
         return tooltip.toString();
+    }
+
+    private void appendDetails(StringBuilder tooltip, java.util.Map<String, Object> details)
+    {
+        Object projectName = details.get("projectName"); //$NON-NLS-1$
+        if (projectName != null)
+        {
+            tooltip.append("\nProject: ").append(projectName); //$NON-NLS-1$
+        }
+        Object pipelineStatus = details.get("pipelineStatus"); //$NON-NLS-1$
+        if (pipelineStatus != null)
+        {
+            tooltip.append("\nPipeline: ").append(pipelineStatus); //$NON-NLS-1$
+        }
+        Object synchronizationState = details.get("synchronizationState"); //$NON-NLS-1$
+        if (synchronizationState != null)
+        {
+            tooltip.append("\nSync state: ").append(synchronizationState); //$NON-NLS-1$
+        }
+        Object equalityState = details.get("equalityState"); //$NON-NLS-1$
+        if (equalityState != null)
+        {
+            tooltip.append("\nEquality state: ").append(equalityState); //$NON-NLS-1$
+        }
     }
 
     private void appendRecentEvents(StringBuilder tooltip, List<ProgressEvent> recentEvents)

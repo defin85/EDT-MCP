@@ -11,6 +11,7 @@ import static org.junit.Assert.*;
 import org.junit.Test;
 
 import com.ditrix.edt.mcp.server.protocol.GsonProvider;
+import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
@@ -93,13 +94,15 @@ public class ToolCallResultTest
     {
         ToolsListResult listResult = new ToolsListResult();
         JsonElement schema = JsonParser.parseString("{\"type\":\"object\"}");
-        listResult.addTool("get_edt_version", "Get EDT version", schema);
+        listResult.addTool("get_edt_version", "Get EDT version", schema, IMcpTool.TaskSupport.OPTIONAL.getWireValue());
 
         assertEquals(1, listResult.getTools().size());
         var tool = listResult.getTools().get(0);
         assertEquals("get_edt_version", tool.getName());
         assertEquals("Get EDT version", tool.getDescription());
         assertNotNull(tool.getInputSchema());
+        assertNotNull(tool.getExecution());
+        assertEquals(IMcpTool.TaskSupport.OPTIONAL.getWireValue(), tool.getExecution().getTaskSupport());
     }
 
     @Test
@@ -107,12 +110,14 @@ public class ToolCallResultTest
     {
         ToolsListResult listResult = new ToolsListResult();
         JsonElement schema = JsonParser.parseString("{\"type\":\"object\",\"properties\":{}}");
-        listResult.addTool("test_tool", "A test tool", schema);
+        listResult.addTool("test_tool", "A test tool", schema, IMcpTool.TaskSupport.REQUIRED.getWireValue());
 
         String json = GsonProvider.toJson(listResult);
         JsonElement element = JsonParser.parseString(json);
         var tools = element.getAsJsonObject().get("tools").getAsJsonArray();
         assertEquals(1, tools.size());
         assertEquals("test_tool", tools.get(0).getAsJsonObject().get("name").getAsString());
+        assertEquals("required",
+            tools.get(0).getAsJsonObject().getAsJsonObject("execution").get("taskSupport").getAsString());
     }
 }

@@ -12,7 +12,10 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -26,6 +29,7 @@ import com.ditrix.edt.mcp.server.protocol.McpConstants;
 import com.ditrix.edt.mcp.server.protocol.McpProtocolHandler;
 import com.ditrix.edt.mcp.server.progress.OperationProgressReporter;
 import com.ditrix.edt.mcp.server.progress.OperationProgressState;
+import com.ditrix.edt.mcp.server.progress.OperationTrackerHandle;
 import com.ditrix.edt.mcp.server.progress.ProgressNotificationSender;
 import com.ditrix.edt.mcp.server.progress.ProgressEvent;
 import com.ditrix.edt.mcp.server.progress.SseSessionRegistry;
@@ -77,6 +81,16 @@ import com.sun.net.httpserver.HttpServer;
  */
 public class McpServer
 {
+    static final String HTTP_SERVER_IDLE_INTERVAL_PROPERTY = "sun.net.httpserver.idleInterval"; //$NON-NLS-1$
+    static final String HTTP_SERVER_MAX_IDLE_CONNECTIONS_PROPERTY = "sun.net.httpserver.maxIdleConnections"; //$NON-NLS-1$
+    static final String HTTP_SERVER_MAX_REQUEST_TIME_PROPERTY = "sun.net.httpserver.maxReqTime"; //$NON-NLS-1$
+    static final String HTTP_SERVER_MAX_RESPONSE_TIME_PROPERTY = "sun.net.httpserver.maxRspTime"; //$NON-NLS-1$
+
+    static final String HTTP_SERVER_IDLE_INTERVAL_SECONDS = "300"; //$NON-NLS-1$
+    static final String HTTP_SERVER_MAX_IDLE_CONNECTIONS = "32"; //$NON-NLS-1$
+    static final String HTTP_SERVER_MAX_REQUEST_TIME_MS = "600000"; //$NON-NLS-1$
+    static final String HTTP_SERVER_MAX_RESPONSE_TIME_MS = "600000"; //$NON-NLS-1$
+
     private HttpServer server;
     private int port;
     private volatile boolean running = false;
@@ -96,8 +110,14 @@ public class McpServer
     /** Currently active tool call that can be interrupted */
     private volatile ActiveToolCall activeToolCall = null;
 
-    /** Active long-running operation progress reporter */
-    private volatile OperationProgressReporter activeOperationReporter = null;
+    /** Active long-running operation reporters keyed by operation id */
+    private final ConcurrentMap<String, OperationProgressReporter> activeOperationReporters = new ConcurrentHashMap<>();
+
+    /** Optional tracker handles that own background listeners/watchdogs for active operations */
+    private final ConcurrentMap<String, OperationTrackerHandle> activeOperationHandles = new ConcurrentHashMap<>();
+
+    /** Focused active operation id used for UI fallback projection */
+    private volatile String focusedOperationId = null;
 
     /** Session-aware registry for server-originated SSE notifications */
     private final SseSessionRegistry sseSessionRegistry = new SseSessionRegistry();
@@ -142,15 +162,7 @@ public class McpServer
 
         this.port = port;
 
-        // Configure HTTP server idle interval (seconds) to prevent premature connection drops
-        // This sets the time the server waits before closing idle connections
-        System.setProperty("sun.net.httpserver.idleInterval", "300"); //$NON-NLS-1$ //$NON-NLS-2$
-        // Increase max idle connections to handle concurrent MCP clients
-        System.setProperty("sun.net.httpserver.maxIdleConnections", "32"); //$NON-NLS-1$ //$NON-NLS-2$
-        // Increase max request time to allow long-running tool operations (10 minutes)
-        System.setProperty("sun.net.httpserver.maxReqTime", "600"); //$NON-NLS-1$ //$NON-NLS-2$
-        // Increase max response time to allow large responses (10 minutes)
-        System.setProperty("sun.net.httpserver.maxRspTime", "600"); //$NON-NLS-1$ //$NON-NLS-2$
+        configureHttpServerProperties();
 
         server = HttpServer.create(new InetSocketAddress(port), 0);
 
@@ -196,6 +208,16 @@ public class McpServer
         running = true;
         
         Activator.logInfo("MCP Server started on port " + port); //$NON-NLS-1$
+    }
+
+    static void configureHttpServerProperties()
+    {
+        // idleInterval is configured in seconds.
+        System.setProperty(HTTP_SERVER_IDLE_INTERVAL_PROPERTY, HTTP_SERVER_IDLE_INTERVAL_SECONDS);
+        System.setProperty(HTTP_SERVER_MAX_IDLE_CONNECTIONS_PROPERTY, HTTP_SERVER_MAX_IDLE_CONNECTIONS);
+        // maxReqTime/maxRspTime are configured in milliseconds.
+        System.setProperty(HTTP_SERVER_MAX_REQUEST_TIME_PROPERTY, HTTP_SERVER_MAX_REQUEST_TIME_MS);
+        System.setProperty(HTTP_SERVER_MAX_RESPONSE_TIME_PROPERTY, HTTP_SERVER_MAX_RESPONSE_TIME_MS);
     }
 
     /**
@@ -281,6 +303,11 @@ public class McpServer
                 taskExecutor.shutdownNow();
                 taskExecutor = null;
             }
+            activeOperationReporters.values().forEach(reporter -> reporter.setStateListener(null));
+            activeOperationReporters.clear();
+            activeOperationHandles.values().forEach(this::disposeTrackerHandle);
+            activeOperationHandles.clear();
+            focusedOperationId = null;
             taskRegistry.clear();
             sseSessionRegistry.clear();
             Activator.logInfo("MCP Server stopped"); //$NON-NLS-1$
@@ -442,13 +469,33 @@ public class McpServer
      */
     public synchronized void setActiveOperation(OperationProgressReporter reporter)
     {
-        if (this.activeOperationReporter != null && this.activeOperationReporter != reporter)
+        setActiveOperation(reporter, null);
+    }
+
+    /**
+     * Registers active operation progress reporter and optional tracker handle.
+     *
+     * @param reporter reporter for the currently active long-running operation
+     * @param trackerHandle optional lifecycle handle for detached/background tracking
+     */
+    public synchronized void setActiveOperation(OperationProgressReporter reporter, OperationTrackerHandle trackerHandle)
+    {
+        OperationProgressState snapshot = reporter != null ? reporter.snapshot() : null;
+        if (snapshot == null || !hasText(snapshot.getOperationId()))
         {
-            this.activeOperationReporter.setStateListener(null);
+            return;
         }
+
+        String operationId = snapshot.getOperationId();
+        OperationProgressReporter previous = activeOperationReporters.put(operationId, Objects.requireNonNull(reporter));
+        if (previous != null && previous != reporter)
+        {
+            previous.setStateListener(null);
+        }
+        replaceTrackerHandle(operationId, trackerHandle);
         reporter.appendStateListener(this::handleActiveOperationUpdate);
-        this.activeOperationReporter = Objects.requireNonNull(reporter);
-        handleActiveOperationUpdate(reporter.snapshot());
+        focusedOperationId = operationId;
+        handleActiveOperationUpdate(snapshot);
     }
 
     /**
@@ -458,7 +505,23 @@ public class McpServer
      */
     public OperationProgressState getActiveOperationSnapshot()
     {
-        OperationProgressReporter reporter = activeOperationReporter;
+        OperationProgressReporter reporter = getFocusedOperationReporter();
+        return reporter != null ? reporter.snapshot() : null;
+    }
+
+    /**
+     * Returns a snapshot for a specific tracked operation id.
+     *
+     * @param operationId operation id to inspect
+     * @return matching snapshot or null
+     */
+    public OperationProgressState getOperationSnapshot(String operationId)
+    {
+        if (!hasText(operationId))
+        {
+            return null;
+        }
+        OperationProgressReporter reporter = activeOperationReporters.get(operationId);
         return reporter != null ? reporter.snapshot() : null;
     }
 
@@ -467,11 +530,32 @@ public class McpServer
      */
     public synchronized void clearActiveOperation()
     {
-        if (this.activeOperationReporter != null)
+        clearActiveOperation(focusedOperationId);
+    }
+
+    /**
+     * Clears the active operation progress reporter for the specified operation id.
+     *
+     * @param operationId operation id to remove from the focused projection
+     */
+    public synchronized void clearActiveOperation(String operationId)
+    {
+        String targetOperationId = hasText(operationId) ? operationId : focusedOperationId;
+        if (!hasText(targetOperationId))
         {
-            this.activeOperationReporter.setStateListener(null);
+            return;
         }
-        this.activeOperationReporter = null;
+
+        OperationProgressReporter reporter = activeOperationReporters.remove(targetOperationId);
+        if (reporter != null)
+        {
+            reporter.setStateListener(null);
+        }
+        disposeTrackerHandle(activeOperationHandles.remove(targetOperationId));
+        if (targetOperationId.equals(focusedOperationId))
+        {
+            focusedOperationId = selectMostRecentOperationId();
+        }
     }
 
     /**
@@ -481,7 +565,7 @@ public class McpServer
      */
     public void appendActiveOperationEvent(ProgressEvent event)
     {
-        OperationProgressReporter reporter = activeOperationReporter;
+        OperationProgressReporter reporter = getFocusedOperationReporter();
         if (reporter != null)
         {
             reporter.appendEvent(event);
@@ -491,6 +575,91 @@ public class McpServer
     private void handleActiveOperationUpdate(OperationProgressState state)
     {
         progressNotificationSender.onOperationUpdated(state);
+    }
+
+    private void replaceTrackerHandle(String operationId, OperationTrackerHandle trackerHandle)
+    {
+        if (!hasText(operationId))
+        {
+            return;
+        }
+        OperationTrackerHandle previous = trackerHandle != null
+                ? activeOperationHandles.put(operationId, trackerHandle)
+                : activeOperationHandles.remove(operationId);
+        if (previous != null && previous != trackerHandle)
+        {
+            disposeTrackerHandle(previous);
+        }
+    }
+
+    private void disposeTrackerHandle(OperationTrackerHandle trackerHandle)
+    {
+        if (trackerHandle == null)
+        {
+            return;
+        }
+        try
+        {
+            trackerHandle.dispose();
+        }
+        catch (RuntimeException e)
+        {
+            Activator.logError("Failed to dispose operation tracker handle", e); //$NON-NLS-1$
+        }
+    }
+
+    private OperationProgressReporter getFocusedOperationReporter()
+    {
+        String targetOperationId = focusedOperationId;
+        if (hasText(targetOperationId))
+        {
+            OperationProgressReporter reporter = activeOperationReporters.get(targetOperationId);
+            if (reporter != null)
+            {
+                return reporter;
+            }
+        }
+
+        String fallbackOperationId = selectMostRecentOperationId();
+        if (hasText(fallbackOperationId))
+        {
+            focusedOperationId = fallbackOperationId;
+            return activeOperationReporters.get(fallbackOperationId);
+        }
+        return null;
+    }
+
+    private String selectMostRecentOperationId()
+    {
+        String latestOperationId = null;
+        Instant latestUpdatedAt = null;
+
+        for (var entry : activeOperationReporters.entrySet())
+        {
+            OperationProgressState snapshot = entry.getValue().snapshot();
+            if (snapshot == null)
+            {
+                continue;
+            }
+
+            Instant lastUpdatedAt = snapshot.getLastUpdateAt();
+            if (lastUpdatedAt == null)
+            {
+                lastUpdatedAt = snapshot.getStartedAt();
+            }
+            if (lastUpdatedAt == null)
+            {
+                continue;
+            }
+
+            if (latestUpdatedAt == null || lastUpdatedAt.isAfter(latestUpdatedAt))
+            {
+                latestUpdatedAt = lastUpdatedAt;
+                latestOperationId = entry.getKey();
+            }
+        }
+
+        return latestOperationId;
     }
 
     public TaskRegistry getTaskRegistry()
@@ -831,7 +1000,7 @@ public class McpServer
             String toolName = extractToolName(requestBody);
             
             // Create and register active tool call
-            ActiveToolCall activeCall = new ActiveToolCall(exchange, toolName, requestId);
+            ActiveToolCall activeCall = new ActiveToolCall(exchange, toolName, requestId, McpServer.this);
             setActiveToolCall(activeCall);
             
             // Use a container to hold the result from the background thread

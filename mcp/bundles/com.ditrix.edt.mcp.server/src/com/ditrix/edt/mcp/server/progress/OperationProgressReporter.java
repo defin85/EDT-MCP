@@ -12,6 +12,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -38,6 +39,8 @@ public class OperationProgressReporter
     private String requestId;
     private String sessionId;
     private Object progressToken;
+    private boolean detached;
+    private Map<String, Object> details = Map.of();
     private volatile Consumer<OperationProgressState> stateListener;
 
     public OperationProgressReporter()
@@ -67,6 +70,8 @@ public class OperationProgressReporter
         this.requestId = requestId;
         this.sessionId = sessionId;
         this.progressToken = progressToken;
+        this.detached = false;
+        this.details = Map.of();
         addEvent(lastUpdateAt, stage, message, null, null);
         return publishSnapshot(snapshot());
     }
@@ -147,6 +152,45 @@ public class OperationProgressReporter
         publishSnapshot(snapshot());
     }
 
+    public synchronized OperationProgressReporter detachedCopy(String stage, String message, Map<String, Object> details)
+    {
+        OperationProgressReporter copy = new OperationProgressReporter(recentEventLimit);
+        copy.operationId = operationId;
+        copy.toolName = toolName;
+        copy.stage = hasText(stage) ? stage : this.stage;
+        copy.message = hasText(message) ? message : this.message;
+        copy.progress = null;
+        copy.total = null;
+        copy.indeterminate = true;
+        copy.status = OperationProgressState.STATUS_RUNNING;
+        copy.startedAt = startedAt != null ? startedAt : Instant.now();
+        copy.lastUpdateAt = Instant.now();
+        copy.requestId = requestId;
+        copy.sessionId = sessionId;
+        copy.progressToken = null;
+        copy.detached = true;
+        copy.details = sanitizeDetails(details != null && !details.isEmpty() ? details : this.details);
+        copy.recentEvents.addAll(recentEvents);
+        copy.addEvent(copy.lastUpdateAt, copy.stage, copy.message, null, null);
+        return copy;
+    }
+
+    public synchronized OperationProgressState detachedUpdate(String stage, String message, Map<String, Object> details)
+    {
+        this.stage = stage;
+        this.message = message;
+        this.progress = null;
+        this.total = null;
+        this.indeterminate = true;
+        this.status = OperationProgressState.STATUS_RUNNING;
+        this.progressToken = null;
+        this.detached = true;
+        this.details = sanitizeDetails(details);
+        this.lastUpdateAt = Instant.now();
+        addEvent(lastUpdateAt, stage, message, null, null);
+        return publishSnapshot(snapshot());
+    }
+
     public void setStateListener(Consumer<OperationProgressState> stateListener)
     {
         this.stateListener = stateListener;
@@ -181,7 +225,8 @@ public class OperationProgressReporter
         Instant snapshotTime = Instant.now();
         long elapsedSeconds = Duration.between(startedAt, snapshotTime).getSeconds();
         return new OperationProgressState(operationId, toolName, stage, message, progress, total, indeterminate,
-                status, startedAt, lastUpdateAt, elapsedSeconds, requestId, sessionId, progressToken,
+                status, startedAt, lastUpdateAt, elapsedSeconds, requestId, sessionId, progressToken, detached,
+                details,
                 new ArrayList<>(recentEvents));
     }
 
@@ -233,5 +278,10 @@ public class OperationProgressReporter
             }
         }
         return snapshot;
+    }
+
+    private Map<String, Object> sanitizeDetails(Map<String, Object> details)
+    {
+        return details != null && !details.isEmpty() ? Map.copyOf(details) : Map.of();
     }
 }

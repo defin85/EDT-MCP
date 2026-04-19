@@ -50,6 +50,28 @@ set VER_EDT=2025.2.3+30
 	-profileProperties org.eclipse.update.reconcile=true
 ```
 
+### From local build artifact (development)
+
+After
+
+```bash
+mvn -f mcp/pom.xml clean verify --batch-mode --no-transfer-progress -T 1C
+```
+
+the repository module produces:
+
+- `com.ditrix.edt.mcp.server.repository-1.0.0-SNAPSHOT.zip` — mutable latest build
+- `com.ditrix.edt.mcp.server.repository-1.0.0-SNAPSHOT-YYYYMMDDHHMMSS.zip` — immutable per-build local update site
+- `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site/` — stable composite local update site
+- `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site.zip` — stable ZIP wrapper over the same composite local update site
+
+For repeated local reinstall/update testing in EDT, prefer the timestamped ZIP so `p2` does not
+lose the previously installed build from the same repository URL.
+
+If you want one constant local source path for repeated **Update** operations, point EDT to
+`local-update-site/` (or `local-update-site.zip`). It is a composite p2 repository that keeps
+previous local builds as child repositories instead of replacing them on every `clean verify`.
+
 ### Installation Result
 
 <details>
@@ -132,10 +154,13 @@ Note: The EDT operation may still be running in background.
 
 ### Progress Reporting For Long Operations
 
-`update_database` publishes the same runtime progress model to both EDT UI and MCP clients.
+`update_database`, `clean_project`, and full-project `revalidate_objects` publish the same runtime
+progress model to both EDT UI and MCP clients.
 
 - The status bar keeps showing the active EDT operation even after **Continue in Background** interrupted the HTTP call.
 - MCP `notifications/progress` are sent only when the client provided `_meta.progressToken` in the original `tools/call` request and has an SSE stream attached to the same `MCP-Session-Id`.
+- When EDT work survives the original task/call lifetime, `get_active_operation` stays non-idle and returns a detached snapshot with `detached: true`, the same `operationId`, and structured `details`.
+- Detached continuation relies on `get_active_operation` and the EDT status bar; the original `progressToken` is not kept alive after the MCP task/call becomes terminal.
 - Clients that ignore progress notifications still receive the normal final tool result.
 - `get_active_operation` can be used as a polling fallback when a client does not support or does not consume `notifications/progress`.
 
@@ -179,10 +204,15 @@ The server now exposes experimental MCP Tasks support for long-running tool exec
 
 - `initialize` advertises `capabilities.tasks.list`, `capabilities.tasks.cancel`, and `capabilities.tasks.requests.tools.call`
 - `tools/list` exposes `execution.taskSupport` for every tool
-- `update_database` currently supports `execution.taskSupport: "optional"`
+- `update_database` and `clean_project` support `execution.taskSupport: "optional"`
+- `revalidate_objects` supports `execution.taskSupport: "optional"` for full-project revalidation only; task-augmented partial object revalidation is rejected with an actionable error
 - `tasks/get`, `tasks/list`, `tasks/result`, and `tasks/cancel` are available over the same `/mcp` endpoint
-- The original `_meta.progressToken` stays valid for task-backed `update_database` calls, so `notifications/progress` can continue after the initial `CreateTaskResult`
+- The original `_meta.progressToken` stays valid for task-backed `update_database`, `clean_project`, and full-project `revalidate_objects` calls while the task is live; after a terminal MCP outcome, detached continuation moves to `get_active_operation`
+- When cancellation can leave EDT work running in background, terminal sync/task payloads include `_meta["io.ditrix.edt.mcp/detached-continuation"]` with the stable `operationId` and `pollTool: "get_active_operation"`
+- Conflicting mutable task-backed operations are rejected explicitly instead of running in unsafe parallel
+- Heavy read-only diagnostics such as `get_problem_summary` and `get_project_errors` remain synchronous in this rollout; use summary/filter/limit shaping instead of task augmentation
 - `get_active_operation` remains available as a compatibility fallback for clients that do not consume Tasks yet
+- `debug_launch` remains sync-first during this rollout; debug session discoverability and cleanup stay on the separate runtime debug-control track
 
 Minimal task-augmented `update_database` request:
 
@@ -620,6 +650,7 @@ Typical stages:
 - Requires a launch configuration to be created in EDT first (Run → Run Configurations...)
 - If no configuration exists, returns list of available configurations
 - `updateBeforeLaunch=true` skips update if database is already up to date
+- `debug_launch` is intentionally sync-first; task-style debug session lifecycle is handled separately from the MCP Tasks rollout
 
 ### BSL Code Analysis Tools
 
