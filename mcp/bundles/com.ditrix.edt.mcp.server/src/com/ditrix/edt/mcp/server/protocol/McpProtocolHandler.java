@@ -202,6 +202,11 @@ public class McpProtocolHandler
             return handleTaskAugmentedToolCall(tool, params, request, requestId, sessionId, acceptsSse, transportMode);
         }
 
+        if (shouldAutoPromoteBareCallToTask(tool, params))
+        {
+            return handleTaskAugmentedToolCall(tool, params, request, requestId, sessionId, acceptsSse, transportMode);
+        }
+
         if (IMcpTool.TaskSupport.REQUIRED.equals(tool.getTaskSupport()))
         {
             return buildErrorResponse(McpConstants.ERROR_INVALID_PARAMS,
@@ -222,6 +227,39 @@ public class McpProtocolHandler
         return new ToolExecutionContext(requestId != null ? requestId.toString() : null, toolName, sessionId,
                 request != null ? request.getProgressToken() : null, acceptsSse, normalizedTransportMode,
                 operationId != null ? operationId : UUID.randomUUID().toString(), cancellationToken);
+    }
+
+    private boolean shouldAutoPromoteBareCallToTask(IMcpTool tool, Map<String, String> params)
+    {
+        if (tool == null || params == null)
+        {
+            return false;
+        }
+
+        String toolName = tool.getName();
+        if ("update_database".equals(toolName) || "clean_project".equals(toolName)) //$NON-NLS-1$ //$NON-NLS-2$
+        {
+            return true;
+        }
+        if (!"revalidate_objects".equals(toolName)) //$NON-NLS-1$
+        {
+            return false;
+        }
+
+        String objectsJson = params.get("objects"); //$NON-NLS-1$
+        if (objectsJson == null || objectsJson.isBlank())
+        {
+            return true;
+        }
+        try
+        {
+            JsonElement element = JsonParser.parseString(objectsJson);
+            return element.isJsonArray() && element.getAsJsonArray().size() == 0;
+        }
+        catch (RuntimeException e)
+        {
+            return false;
+        }
     }
 
     private Object normalizeRequestId(JsonRpcRequest request)
@@ -614,8 +652,7 @@ public class McpProtocolHandler
         try
         {
             UserSignal signal = consumeUserSignal && server != null ? server.consumeUserSignal() : null;
-            boolean plainTextMode = Activator.getDefault().getPreferenceStore()
-                .getBoolean(PreferenceConstants.PREF_PLAIN_TEXT_MODE);
+            boolean plainTextMode = isPlainTextModeEnabled();
             JsonElement payload = buildToolCallPayload(tool, params, result, signal, plainTextMode);
             payload = attachDetachedContinuationMeta(payload, context != null ? context.getOperationId() : null, server);
             return ToolExecutionOutcome.success(payload);
@@ -623,6 +660,23 @@ public class McpProtocolHandler
         finally
         {
             ToolExecutionContextHolder.clear();
+        }
+    }
+
+    private boolean isPlainTextModeEnabled()
+    {
+        Activator activator = Activator.getDefault();
+        if (activator == null)
+        {
+            return false;
+        }
+        try
+        {
+            return activator.getPreferenceStore().getBoolean(PreferenceConstants.PREF_PLAIN_TEXT_MODE);
+        }
+        catch (RuntimeException e)
+        {
+            return false;
         }
     }
 

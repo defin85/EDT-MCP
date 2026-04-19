@@ -82,7 +82,9 @@ public class RevalidateObjectsTool implements IMcpTool
         return "Revalidate EDT project or specific objects. " + //$NON-NLS-1$
                "If objects array is empty or missing, revalidates entire project. " + //$NON-NLS-1$
                "FQN examples: 'Document.SalesOrder', 'Catalog.Products', 'CommonModule.Common'. " + //$NON-NLS-1$
-               "Russian type names are also supported (e.g. 'Документ.ПриходнаяНакладная', 'Справочник.Номенклатура')."; //$NON-NLS-1$
+               "Russian type names are also supported (e.g. 'Документ.ПриходнаяНакладная', 'Справочник.Номенклатура'). " + //$NON-NLS-1$
+               "Full-project revalidation is async-first at runtime: bare calls auto-promote into task-backed " + //$NON-NLS-1$
+               "execution, while partial object revalidation remains synchronous."; //$NON-NLS-1$
     }
 
     @Override

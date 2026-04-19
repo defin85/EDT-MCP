@@ -64,7 +64,9 @@ public class UpdateDatabaseTool implements IMcpTool
     {
         return "Update database (infobase) for an application. " + //$NON-NLS-1$
                "Requires application ID from get_applications tool. " + //$NON-NLS-1$
-               "Supports full update (complete reload) and incremental update (changes only)."; //$NON-NLS-1$
+               "Supports full update (complete reload) and incremental update (changes only). " + //$NON-NLS-1$
+               "Async-first at runtime: bare calls auto-promote into task-backed execution, " + //$NON-NLS-1$
+               "and the final result is retrieved via tasks/result in the same MCP session."; //$NON-NLS-1$
     }
     
     @Override

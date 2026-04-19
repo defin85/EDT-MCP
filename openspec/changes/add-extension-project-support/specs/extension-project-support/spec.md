@@ -9,19 +9,30 @@ and capability hints to clients before tool execution.
 
 - **WHEN** a client invokes `list_projects`
 - **THEN** each returned EDT project identifies whether it is a configuration or extension project
-- **AND** the result includes capability hints sufficient for tool selection
+- **AND** the result includes a stable documented capability vocabulary sufficient for tool
+  selection
+- **AND** the vocabulary covers at minimum metadata reads, module reads, mutation/refactor flows,
+  and runtime/application flows
 
 ### Requirement: Extension Metadata And Module Read Support
 
 The system SHALL support verified read-only metadata and module inspection flows for extension
 projects when EDT exposes a compatible model.
 
-#### Scenario: Client reads extension metadata
+#### Scenario: Client reads supported extension metadata
 
-- **WHEN** a client invokes a supported read-only metadata or module tool against a valid
-  extension project
+- **WHEN** a client invokes a documented first-wave read-only metadata or module tool against a
+  valid extension project
 - **THEN** the server resolves the request through shared project context
 - **AND** the tool returns extension-scoped data or a precise model-limitation error
+
+#### Scenario: Client invokes a read-only tool outside the verified extension matrix
+
+- **WHEN** a client invokes a read-only metadata or module tool that is not documented as verified
+  for extension projects
+- **THEN** the server returns an actionable unsupported-operation or model-limitation error
+- **AND** the server does not silently fall back to configuration-project semantics for a different
+  project kind
 
 ### Requirement: Guarded Extension Write And Refactor Flows
 
@@ -47,3 +58,10 @@ extension lifecycle surface is approved.
 - **THEN** the server returns a clear error explaining that runtime/application flows are
   configuration-only
 - **AND** the response does not attempt infobase actions for the extension project
+
+#### Scenario: Client invokes configuration-properties flow on an extension project
+
+- **WHEN** a client invokes `get_configuration_properties` for an extension project in this rollout
+- **THEN** the server returns a clear error explaining that extension-specific property semantics
+  are not part of the configuration-properties contract yet
+- **AND** the response does not silently return properties for a different configuration project

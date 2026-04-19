@@ -161,7 +161,8 @@ progress model to both EDT UI and MCP clients.
 - MCP `notifications/progress` are sent only when the client provided `_meta.progressToken` in the original `tools/call` request and has an SSE stream attached to the same `MCP-Session-Id`.
 - When EDT work survives the original task/call lifetime, `get_active_operation` stays non-idle and returns a detached snapshot with `detached: true`, the same `operationId`, and structured `details`.
 - Detached continuation relies on `get_active_operation` and the EDT status bar; the original `progressToken` is not kept alive after the MCP task/call becomes terminal.
-- Clients that ignore progress notifications still receive the normal final tool result.
+- For `update_database`, `clean_project`, and full-project `revalidate_objects`, a bare call now returns task creation metadata; the final payload is retrieved later through `tasks/result` in the same MCP session.
+- Sync-only tools still return the normal final tool result directly when clients ignore progress notifications.
 - `get_active_operation` can be used as a polling fallback when a client does not support or does not consume `notifications/progress`.
 
 Minimal request requirements for progress notifications:
@@ -204,9 +205,10 @@ The server now exposes experimental MCP Tasks support for long-running tool exec
 
 - `initialize` advertises `capabilities.tasks.list`, `capabilities.tasks.cancel`, and `capabilities.tasks.requests.tools.call`
 - `tools/list` exposes `execution.taskSupport` for every tool
-- `update_database` and `clean_project` support `execution.taskSupport: "optional"`
-- `revalidate_objects` supports `execution.taskSupport: "optional"` for full-project revalidation only; task-augmented partial object revalidation is rejected with an actionable error
+- `update_database` and `clean_project` keep `execution.taskSupport: "optional"` and are async-first at runtime: bare calls auto-promote into task-backed execution
+- `revalidate_objects` keeps `execution.taskSupport: "optional"` and is async-first only for full-project revalidation; partial object revalidation stays synchronous and task-augmented partial requests are rejected with an actionable error
 - `tasks/get`, `tasks/list`, `tasks/result`, and `tasks/cancel` are available over the same `/mcp` endpoint
+- Follow-up `tasks/get`, `tasks/result`, and `tasks/cancel` calls must use the same `MCP-Session-Id` that created the task
 - The original `_meta.progressToken` stays valid for task-backed `update_database`, `clean_project`, and full-project `revalidate_objects` calls while the task is live; after a terminal MCP outcome, detached continuation moves to `get_active_operation`
 - When cancellation can leave EDT work running in background, terminal sync/task payloads include `_meta["io.ditrix.edt.mcp/detached-continuation"]` with the stable `operationId` and `pollTool: "get_active_operation"`
 - Conflicting mutable task-backed operations are rejected explicitly instead of running in unsafe parallel
@@ -214,7 +216,27 @@ The server now exposes experimental MCP Tasks support for long-running tool exec
 - `get_active_operation` remains available as a compatibility fallback for clients that do not consume Tasks yet
 - `debug_launch` remains sync-first during this rollout; debug session discoverability and cleanup stay on the separate runtime debug-control track
 
-Minimal task-augmented `update_database` request:
+Minimal bare `update_database` request. The server auto-promotes it into task-backed execution:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "update_database",
+    "arguments": {
+      "projectName": "MyProject",
+      "applicationId": "app-id"
+    },
+    "_meta": {
+      "progressToken": "update-task-1"
+    }
+  }
+}
+```
+
+Explicit task-augmented `update_database` request:
 
 ```json
 {
@@ -237,7 +259,7 @@ Minimal task-augmented `update_database` request:
 }
 ```
 
-The initial response returns `CreateTaskResult`, and the final tool payload is retrieved later through `tasks/result`.
+The initial response returns `CreateTaskResult` in both cases, and the final tool payload is retrieved later through `tasks/result` in the same MCP session.
 
 ## Connecting AI Assistants
 
@@ -324,8 +346,8 @@ Add to `claude_desktop_config.json`:
 | `get_configuration_properties` | Gets 1C configuration properties |
 | `get_project_errors` | Returns EDT problems with severity/checkId/objects filters |
 | `get_problem_summary` | Problem counts grouped by project and severity |
-| `clean_project` | Cleans project markers and triggers full revalidation |
-| `revalidate_objects` | Revalidates specific objects by FQN (e.g. "Document.MyDoc") |
+| `clean_project` | Cleans project markers and triggers full revalidation; async-first at runtime |
+| `revalidate_objects` | Revalidates specific objects by FQN (e.g. "Document.MyDoc"); full-project mode is async-first at runtime |
 | `get_bookmarks` | Returns workspace bookmarks |
 | `get_tasks` | Returns TODO/FIXME task markers |
 | `get_check_description` | Returns check documentation from .md files |
@@ -340,7 +362,7 @@ Add to `claude_desktop_config.json`:
 | `get_tags` | Get list of all tags defined in the project with descriptions and object counts |
 | `get_objects_by_tags` | Get metadata objects filtered by tags with tag descriptions and object FQNs |
 | `get_applications` | Get list of applications (infobases) for a project with update state |
-| `update_database` | Update database (infobase) with full or incremental update mode; supports task augmentation |
+| `update_database` | Update database (infobase) with full or incremental update mode; async-first at runtime and still supports explicit task augmentation |
 | `get_active_operation` | Get the current long-running operation progress snapshot for polling fallback |
 | `debug_launch` | Launch application in debug mode (auto-updates database before launch) |
 | `get_form_screenshot` | Capture PNG screenshot of form WYSIWYG editor (embedded image resource) |
@@ -610,9 +632,10 @@ Add to `claude_desktop_config.json`:
 **Progress behavior:**
 - Tracks stage-aware runtime progress in the EDT status bar
 - Emits MCP `notifications/progress` only when the client supplies `_meta.progressToken`
-- Keeps the final JSON result format unchanged for clients that do not consume progress notifications
-- Can also be invoked as a task-backed `tools/call` request (`execution.taskSupport: "optional"`)
-- Final task result is retrieved via `tasks/result`; `tasks/get`/`tasks/list` provide status polling
+- Is async-first at runtime: a bare `tools/call` request auto-promotes into task-backed execution
+- Keeps `execution.taskSupport: "optional"` for explicit task augmentation instead of advertising MCP `required`
+- Returns `CreateTaskResult` first; the final task result is retrieved via `tasks/result` in the same MCP session
+- `tasks/get` and `tasks/list` provide status polling during execution
 
 Typical stages:
 - `validation`

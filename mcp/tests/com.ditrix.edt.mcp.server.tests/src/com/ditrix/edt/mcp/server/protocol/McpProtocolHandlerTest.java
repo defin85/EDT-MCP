@@ -8,12 +8,17 @@ package com.ditrix.edt.mcp.server.protocol;
 
 import static org.junit.Assert.*;
 
+import java.lang.reflect.Field;
 import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.ditrix.edt.mcp.server.Activator;
 import com.ditrix.edt.mcp.server.McpServer;
 import com.ditrix.edt.mcp.server.progress.OperationProgressReporter;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
@@ -42,6 +47,7 @@ public class McpProtocolHandlerTest
 {
     private McpProtocolHandler handler;
     private McpToolRegistry registry;
+    private McpServer testServer;
 
     @Before
     public void setUp()
@@ -55,6 +61,8 @@ public class McpProtocolHandlerTest
     public void tearDown()
     {
         registry.clear();
+        clearTestActivator();
+        shutdownTestServer();
     }
 
     // === Initialize ===
@@ -354,6 +362,58 @@ public class McpProtocolHandlerTest
     }
 
     @Test
+    public void testToolCallAutoPromotesBareUpdateDatabaseRequestIntoTask() throws Exception
+    {
+        registry.register(new StubTool(UpdateDatabaseTool.NAME, "Async-first", "{\"type\":\"object\"}", //$NON-NLS-1$ //$NON-NLS-2$
+                TaskSupport.OPTIONAL));
+        installTestActivator(createTaskCapableServer());
+
+        String request = buildToolCallRequest(1, UpdateDatabaseTool.NAME,
+                "{\"projectName\":\"TestConfiguration\",\"applicationId\":\"app-1\"}"); //$NON-NLS-1$ //$NON-NLS-2$
+        String response = handler.processRequest(request, "session-1", false, "json"); //$NON-NLS-1$ //$NON-NLS-2$
+
+        JsonObject json = parseResponse(response);
+        JsonObject result = json.getAsJsonObject("result"); //$NON-NLS-1$
+        assertNotNull(result);
+        assertTrue(result.has("task")); //$NON-NLS-1$
+
+        String taskId = result.getAsJsonObject("task").get("taskId").getAsString(); //$NON-NLS-1$ //$NON-NLS-2$
+        String getRequest = buildJsonRpcRequest(2, "tasks/get", "{\"taskId\":\"" + taskId + "\"}"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+        JsonObject ownSession = parseResponse(handler.processRequest(getRequest, "session-1", false, "json")); //$NON-NLS-1$ //$NON-NLS-2$
+        assertEquals(taskId, ownSession.getAsJsonObject("result").get("taskId").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+
+        JsonObject foreignSession = parseResponse(handler.processRequest(getRequest, "session-2", false, "json")); //$NON-NLS-1$ //$NON-NLS-2$
+        assertNotNull(foreignSession.get("error")); //$NON-NLS-1$
+        assertEquals(McpConstants.ERROR_INVALID_PARAMS,
+                foreignSession.getAsJsonObject("error").get("code").getAsInt()); //$NON-NLS-1$
+
+        String resultRequest = buildJsonRpcRequest(3, "tasks/result", "{\"taskId\":\"" + taskId + "\"}"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+        JsonObject taskResult = parseResponse(handler.processRequest(resultRequest, "session-1", false, "json")); //$NON-NLS-1$ //$NON-NLS-2$
+        JsonObject taskPayload = taskResult.getAsJsonObject("result"); //$NON-NLS-1$
+        assertNotNull(taskPayload);
+        assertTrue(taskPayload.has("_meta")); //$NON-NLS-1$
+        assertEquals(taskId,
+                taskPayload.getAsJsonObject("_meta").getAsJsonObject(McpConstants.META_RELATED_TASK) //$NON-NLS-1$
+                        .get("taskId").getAsString()); //$NON-NLS-1$
+    }
+
+    @Test
+    public void testToolCallKeepsPartialRevalidateObjectsSynchronousWithoutTask()
+    {
+        registry.register(new StubTool(RevalidateObjectsTool.NAME, "Revalidate", "{\"type\":\"object\"}", //$NON-NLS-1$ //$NON-NLS-2$
+                TaskSupport.OPTIONAL));
+
+        String request = buildToolCallRequest(1, RevalidateObjectsTool.NAME,
+                "{\"projectName\":\"TestConfiguration\",\"objects\":[\"Document.SalesOrder\"]}"); //$NON-NLS-1$ //$NON-NLS-2$
+        String response = handler.processRequest(request);
+
+        JsonObject json = parseResponse(response);
+        JsonObject result = json.getAsJsonObject("result"); //$NON-NLS-1$
+        assertNotNull(result);
+        assertFalse("Partial revalidate should remain synchronous without task", result.has("task")); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    @Test
     public void testExtractToolFailureMessageReturnsErrorForFailedStructuredContent()
     {
         JsonElement payload = JsonParser.parseString(GsonProvider.toJson(
@@ -451,6 +511,74 @@ public class McpProtocolHandlerTest
     private JsonObject parseResponse(String response)
     {
         return JsonParser.parseString(response).getAsJsonObject();
+    }
+
+    private McpServer createTaskCapableServer() throws Exception
+    {
+        McpServer server = new McpServer();
+        Field taskExecutorField = McpServer.class.getDeclaredField("taskExecutor"); //$NON-NLS-1$
+        taskExecutorField.setAccessible(true);
+        taskExecutorField.set(server, new ThreadPoolExecutor(0, 1, 60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(), r -> {
+                    Thread thread = new Thread(r, "MCP-Task-Test"); //$NON-NLS-1$
+                    thread.setDaemon(true);
+                    return thread;
+                }));
+        this.testServer = server;
+        return server;
+    }
+
+    private void installTestActivator(McpServer server) throws Exception
+    {
+        Activator activator = new Activator();
+        Field pluginField = Activator.class.getDeclaredField("plugin"); //$NON-NLS-1$
+        pluginField.setAccessible(true);
+        pluginField.set(null, activator);
+
+        Field serverField = Activator.class.getDeclaredField("mcpServer"); //$NON-NLS-1$
+        serverField.setAccessible(true);
+        serverField.set(activator, server);
+    }
+
+    private void clearTestActivator()
+    {
+        try
+        {
+            Field pluginField = Activator.class.getDeclaredField("plugin"); //$NON-NLS-1$
+            pluginField.setAccessible(true);
+            pluginField.set(null, null);
+        }
+        catch (ReflectiveOperationException e)
+        {
+            throw new AssertionError(e);
+        }
+    }
+
+    private void shutdownTestServer()
+    {
+        if (testServer == null)
+        {
+            return;
+        }
+        try
+        {
+            Field taskExecutorField = McpServer.class.getDeclaredField("taskExecutor"); //$NON-NLS-1$
+            taskExecutorField.setAccessible(true);
+            ThreadPoolExecutor executor = (ThreadPoolExecutor) taskExecutorField.get(testServer);
+            if (executor != null)
+            {
+                executor.shutdownNow();
+                taskExecutorField.set(testServer, null);
+            }
+        }
+        catch (ReflectiveOperationException e)
+        {
+            throw new AssertionError(e);
+        }
+        finally
+        {
+            testServer = null;
+        }
     }
 
     /**

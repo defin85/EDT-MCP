@@ -68,7 +68,9 @@ public class CleanProjectTool implements IMcpTool
     {
         return "Clean EDT project and trigger full revalidation. " + //$NON-NLS-1$
                "Refreshes files from disk, clears all validation markers, " + //$NON-NLS-1$
-               "and waits for EDT to complete revalidation."; //$NON-NLS-1$
+               "and waits for EDT to complete revalidation. " + //$NON-NLS-1$
+               "Async-first at runtime: bare calls auto-promote into task-backed execution, " + //$NON-NLS-1$
+               "and the final result is retrieved via tasks/result in the same MCP session."; //$NON-NLS-1$
     }
     
     @Override

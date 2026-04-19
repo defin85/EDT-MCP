@@ -90,4 +90,16 @@ public class TaskRegistryTest
         assertEquals(Boolean.FALSE, info.getIndeterminate());
         assertEquals(Boolean.TRUE, info.getResultAvailable());
     }
+
+    @Test
+    public void testTaskAccessIsScopedToOwningSession()
+    {
+        TaskRecord task = registry.createToolTask("req-1", "session-1", "clean_project", Long.valueOf(60000),
+                "ProjectA", TaskSchedulingKey.projectScoped("ProjectA"));
+
+        assertNotNull(registry.getTask(task.getTaskId(), "session-1"));
+        assertNull(registry.getTask(task.getTaskId(), "session-2"));
+        assertEquals(1, registry.listTasks("session-1", null, Integer.valueOf(20)).getTasks().size());
+        assertEquals(0, registry.listTasks("session-2", null, Integer.valueOf(20)).getTasks().size());
+    }
 }

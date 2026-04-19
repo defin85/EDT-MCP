@@ -11,9 +11,11 @@ an explicit, testable extension-support contract before it can claim that extens
 
 - Add an explicit extension-project capability surface built around shared project-kind and
   capability resolution.
-- Expose project kind and capability hints to clients before tool execution.
+- Expose project kind and stable capability hints to clients before tool execution.
 - Make read-only metadata/module flows for extension projects explicit and testable.
 - Add guarded write/refactor behavior and explicit failures for configuration-only runtime tools.
+- Keep `get_configuration_properties` configuration-only in this rollout until extension-specific
+  property semantics are approved explicitly.
 - Keep extension lifecycle work such as import/export or infobase attachment out of this rollout.
 
 ## Impact
@@ -23,3 +25,5 @@ an explicit, testable extension-support contract before it can claim that extens
   `list_projects`, `README.md`
 - Validation: source-level checks plus a real workspace matrix with both configuration and
   extension projects
+- Discovery contract: `list_projects` documents a stable hint vocabulary that covers at minimum
+  metadata reads, module reads, mutation/refactor flows, and runtime/application flows

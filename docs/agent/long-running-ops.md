@@ -10,7 +10,7 @@
 - `revalidate_objects`
 - `debug_launch`
 
-Первая task-enabled волна: `update_database`, `clean_project`, и full-project `revalidate_objects`.
+Первая async-default волна: `update_database`, `clean_project`, и full-project `revalidate_objects`.
 `debug_launch` остаётся sync-first в этом rollout-е.
 Тяжёлые read-only diagnostics (`get_problem_summary`, `get_project_errors`, `validate_query`) тоже остаются sync-first:
 для них текущая стратегия — contract shaping через summary/filter/limit, а не task enablement.
@@ -26,8 +26,9 @@
 Ключевые contract points:
 
 - `_meta.progressToken` включает `notifications/progress`
-- task augmentation идёт через `tools/call` + `task`
-- финальный task-backed result читается через `tasks/result`
+- affected bare `tools/call` requests auto-promote into task-backed execution server-side
+- explicit task augmentation по-прежнему идёт через `tools/call` + `task`, а `execution.taskSupport` остаётся `optional`
+- финальный task-backed result читается через `tasks/result` в той же MCP session
 - terminal sync/task payload для supported operations может нести `_meta["io.ditrix.edt.mcp/detached-continuation"]`
 - конфликтующие mutable task-backed операции явно отклоняются, а не запускаются параллельно
 - тяжёлые diagnostics остаются sync-only и опираются на summary/filter/limit shaping вместо task lifecycle
@@ -62,14 +63,16 @@
 4. MCP emits `notifications/progress`
 5. Final tool result remains backward-compatible for clients that ignore progress
 
-### Task-Augmented Long Operation
+### Async-First Long Operation
 
-1. Client calls `tools/call` with `task`
-2. Initial response returns `CreateTaskResult`
-3. Пока task live, progress может идти через исходный `progressToken`
-4. После terminal MCP outcome detached continuation, если она есть, переносится в `get_active_operation`
-5. Terminal payload/task result может нести machine-readable continuation hint
-6. `get_active_operation` остаётся compatibility fallback
+1. Client calls bare `tools/call` or explicit task-augmented `tools/call`
+2. Для async-default tools server creates a task even when `task` is omitted
+3. Initial response returns `CreateTaskResult`
+4. Пока task live, progress может идти через исходный `progressToken`
+5. Final payload is retrieved through `tasks/result` in the same MCP session
+6. После terminal MCP outcome detached continuation, если она есть, переносится в `get_active_operation`
+7. Terminal payload/task result может нести machine-readable continuation hint
+8. `get_active_operation` остаётся compatibility fallback
 
 ## Evidence And Gaps
 
