@@ -33,8 +33,6 @@ import com.ditrix.edt.mcp.server.utils.FrontMatter;
 import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectCapability;
 import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
-import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
-import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to navigate to the definition of a symbol (method, metadata object).
@@ -116,12 +114,12 @@ public class GoToDefinitionTool implements IMcpTool
             return "Error: symbol is required"; //$NON-NLS-1$
         }
 
-        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
-        if (context != null && context.isExtensionProject())
+        ProjectCapabilityFailure.ValidationResult validation = ProjectCapabilityFailure
+                .requireVerifiedExtensionSupport(projectName, NAME, ProjectCapability.MODULE_READ,
+                        "Semantic go-to-definition is outside the verified extension matrix in this rollout."); //$NON-NLS-1$
+        if (validation.hasFailure())
         {
-            ProjectCapabilityFailure failure = ProjectCapabilityFailure.unsupportedExtensionOperation(NAME, context,
-                    ProjectCapability.MODULE_READ,
-                    "Semantic go-to-definition is outside the verified extension matrix in this rollout."); //$NON-NLS-1$
+            ProjectCapabilityFailure failure = validation.getFailure();
             LAST_FAILURE.set(failure);
             return failure.toMarkdown();
         }

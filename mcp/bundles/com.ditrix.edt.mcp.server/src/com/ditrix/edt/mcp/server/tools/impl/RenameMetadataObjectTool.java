@@ -56,8 +56,6 @@ import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectCapability;
 import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
-import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
-import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to rename a metadata object or attribute with full refactoring support.
@@ -173,12 +171,12 @@ public class RenameMetadataObjectTool implements IMcpTool
                 "Usage: {projectName: 'MyProject', objectFqn: 'Catalog.Products', newName: 'Goods'}"; //$NON-NLS-1$
         }
 
-        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
-        if (context != null && context.isExtensionProject())
+        ProjectCapabilityFailure.ValidationResult validation = ProjectCapabilityFailure
+                .requireVerifiedExtensionSupport(projectName, NAME, ProjectCapability.MUTATION_REFACTOR,
+                        "Rename/refactor flows stay guarded until extension mutation support is verified."); //$NON-NLS-1$
+        if (validation.hasFailure())
         {
-            ProjectCapabilityFailure failure = ProjectCapabilityFailure.unsupportedExtensionOperation(NAME, context,
-                    ProjectCapability.MUTATION_REFACTOR,
-                    "Rename/refactor flows stay guarded until extension mutation support is verified."); //$NON-NLS-1$
+            ProjectCapabilityFailure failure = validation.getFailure();
             LAST_FAILURE.set(failure);
             return failure.toMarkdown();
         }

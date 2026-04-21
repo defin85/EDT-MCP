@@ -7,7 +7,7 @@
 
 - [x] 2.1 Add shared project-kind, capability, and `ResolvedProjectContext` resolution for EDT
       projects.
-- [ ] 2.2 Add central capability validation so tools do not duplicate project-kind checks.
+- [x] 2.2 Add central capability validation so tools do not duplicate project-kind checks.
 
 ## 3. Client Discovery
 
@@ -40,5 +40,5 @@
 
 - [x] 6.1 Update `README.md` with an honest extension support matrix, stable capability hint
       vocabulary, and non-goals for lifecycle operations.
-- [ ] 6.2 Verify the final matrix on a real workspace for both configuration and extension
+- [x] 6.2 Verify the final matrix on a real workspace for both configuration and extension
       projects.

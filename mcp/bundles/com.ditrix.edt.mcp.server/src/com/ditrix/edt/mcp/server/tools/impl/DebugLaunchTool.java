@@ -31,9 +31,7 @@ import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
-import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
-import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 import com.e1c.g5.dt.applications.ApplicationException;
 import com.e1c.g5.dt.applications.IApplication;
 import com.e1c.g5.dt.applications.IApplicationManager;
@@ -105,12 +103,12 @@ public class DebugLaunchTool implements IMcpTool
             return ToolResult.error("applicationId is required. Use get_applications to get application list.").toJson(); //$NON-NLS-1$
         }
 
-        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
-        if (context != null && context.isExtensionProject())
+        ProjectCapabilityFailure.ValidationResult validation = ProjectCapabilityFailure
+                .requireConfigurationProject(projectName, NAME,
+                        "Use get_extension_runtime_targets for extension target discovery. Extension debug launch remains out of scope; apply_extension_to_infobase covers synchronization only."); //$NON-NLS-1$
+        if (validation.hasFailure())
         {
-            return ProjectCapabilityFailure.configurationOnly(NAME, context,
-                    "Debug launch remains configuration-only in this rollout.") //$NON-NLS-1$
-                    .toJson();
+            return validation.getFailure().toJson();
         }
         
         // Check if project is ready for operations

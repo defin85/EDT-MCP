@@ -21,7 +21,9 @@ import com._1c.g5.v8.dt.core.platform.IV8ProjectManager;
 import com._1c.g5.v8.dt.lifecycle.IServicesOrchestrator;
 import com._1c.g5.v8.dt.md.refactoring.core.IMdRefactoringService;
 import com._1c.g5.v8.dt.navigator.providers.INavigatorContentProviderStateProvider;
+import com._1c.g5.v8.dt.platform.services.core.infobases.IInfobaseAccessManager;
 import com._1c.g5.v8.dt.platform.services.core.infobases.sync.IInfobaseSynchronizationManager;
+import com._1c.g5.v8.dt.platform.services.core.runtimes.execution.IRuntimeComponentManager;
 import com._1c.g5.v8.dt.validation.marker.IMarkerManager;
 import com.ditrix.edt.mcp.server.groups.IGroupService;
 import com.e1c.g5.dt.applications.IApplicationManager;
@@ -55,7 +57,9 @@ public class Activator extends AbstractUIPlugin
     private ServiceTracker<IServicesOrchestrator, IServicesOrchestrator> servicesOrchestratorTracker;
     private ServiceTracker<BmAwareResourceSetProvider, BmAwareResourceSetProvider> resourceSetProviderTracker;
     private ServiceTracker<IApplicationManager, IApplicationManager> applicationManagerTracker;
+    private ServiceTracker<IInfobaseAccessManager, IInfobaseAccessManager> infobaseAccessManagerTracker;
     private ServiceTracker<IInfobaseSynchronizationManager, IInfobaseSynchronizationManager> infobaseSynchronizationManagerTracker;
+    private ServiceTracker<IRuntimeComponentManager, IRuntimeComponentManager> runtimeComponentManagerTracker;
     private ServiceTracker<INavigatorContentProviderStateProvider, INavigatorContentProviderStateProvider> navigatorStateProviderTracker;
     private ServiceTracker<IMdRefactoringService, IMdRefactoringService> mdRefactoringServiceTracker;
     
@@ -111,8 +115,14 @@ public class Activator extends AbstractUIPlugin
         applicationManagerTracker = new ServiceTracker<>(context, IApplicationManager.class, null);
         applicationManagerTracker.open();
 
+        infobaseAccessManagerTracker = new ServiceTracker<>(context, IInfobaseAccessManager.class, null);
+        infobaseAccessManagerTracker.open();
+
         infobaseSynchronizationManagerTracker = new ServiceTracker<>(context, IInfobaseSynchronizationManager.class, null);
         infobaseSynchronizationManagerTracker.open();
+
+        runtimeComponentManagerTracker = new ServiceTracker<>(context, IRuntimeComponentManager.class, null);
+        runtimeComponentManagerTracker.open();
         
         navigatorStateProviderTracker = new ServiceTracker<>(context, INavigatorContentProviderStateProvider.class, null);
         navigatorStateProviderTracker.open();
@@ -207,10 +217,20 @@ public class Activator extends AbstractUIPlugin
             applicationManagerTracker.close();
             applicationManagerTracker = null;
         }
+        if (infobaseAccessManagerTracker != null)
+        {
+            infobaseAccessManagerTracker.close();
+            infobaseAccessManagerTracker = null;
+        }
         if (infobaseSynchronizationManagerTracker != null)
         {
             infobaseSynchronizationManagerTracker.close();
             infobaseSynchronizationManagerTracker = null;
+        }
+        if (runtimeComponentManagerTracker != null)
+        {
+            runtimeComponentManagerTracker.close();
+            runtimeComponentManagerTracker = null;
         }
         if (navigatorStateProviderTracker != null)
         {
@@ -445,6 +465,20 @@ public class Activator extends AbstractUIPlugin
     }
 
     /**
+     * Returns the infobase access manager.
+     *
+     * @return access manager or null if not available
+     */
+    public IInfobaseAccessManager getInfobaseAccessManager()
+    {
+        if (infobaseAccessManagerTracker == null)
+        {
+            return null;
+        }
+        return infobaseAccessManagerTracker.getService();
+    }
+
+    /**
      * Returns the infobase synchronization manager.
      *
      * @return synchronization manager or null if not available
@@ -456,6 +490,20 @@ public class Activator extends AbstractUIPlugin
             return null;
         }
         return infobaseSynchronizationManagerTracker.getService();
+    }
+
+    /**
+     * Returns the runtime component manager service for thick-client execution bridges.
+     *
+     * @return runtime component manager or null if not available
+     */
+    public IRuntimeComponentManager getRuntimeComponentManager()
+    {
+        if (runtimeComponentManagerTracker == null)
+        {
+            return null;
+        }
+        return runtimeComponentManagerTracker.getService();
     }
     
     /**

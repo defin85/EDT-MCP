@@ -46,6 +46,8 @@ import com.ditrix.edt.mcp.server.tools.impl.GetCheckDescriptionTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetConfigurationPropertiesTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetContentAssistTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetEdtVersionTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetExtensionPropertiesTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetExtensionRuntimeTargetsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetFormScreenshotTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetActiveOperationTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetOperationSnapshotTool;
@@ -60,6 +62,9 @@ import com.ditrix.edt.mcp.server.tools.impl.GetTagsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetObjectsByTagsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetTasksTool;
 import com.ditrix.edt.mcp.server.tools.impl.ListProjectsTool;
+import com.ditrix.edt.mcp.server.tools.impl.ListInfobaseExtensionsTool;
+import com.ditrix.edt.mcp.server.tools.impl.ProbeExtensionSyncBridgeTool;
+import com.ditrix.edt.mcp.server.tools.impl.ProbeExtensionXmlContractTool;
 import com.ditrix.edt.mcp.server.tools.impl.CleanProjectTool;
 import com.ditrix.edt.mcp.server.tools.impl.RevalidateObjectsTool;
 import com.ditrix.edt.mcp.server.tools.impl.UpdateDatabaseTool;
@@ -74,6 +79,8 @@ import com.ditrix.edt.mcp.server.tools.impl.ValidateQueryTool;
 import com.ditrix.edt.mcp.server.tools.impl.RenameMetadataObjectTool;
 import com.ditrix.edt.mcp.server.tools.impl.DeleteMetadataObjectTool;
 import com.ditrix.edt.mcp.server.tools.impl.AddMetadataAttributeTool;
+import com.ditrix.edt.mcp.server.tools.impl.CheckExtensionApplicabilityTool;
+import com.ditrix.edt.mcp.server.tools.impl.ApplyExtensionToInfobaseTool;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -237,6 +244,7 @@ public class McpServer
         registry.register(new GetEdtVersionTool());
         registry.register(new ListProjectsTool());
         registry.register(new GetConfigurationPropertiesTool());
+        registry.register(new GetExtensionPropertiesTool());
         registry.register(new CleanProjectTool());
         registry.register(new RevalidateObjectsTool());
         registry.register(new GetProblemSummaryTool());
@@ -255,6 +263,12 @@ public class McpServer
         registry.register(new GetObjectsByTagsTool());
         
         // Application tools
+        registry.register(new GetExtensionRuntimeTargetsTool());
+        registry.register(new ListInfobaseExtensionsTool());
+        registry.register(new CheckExtensionApplicabilityTool());
+        registry.register(new ApplyExtensionToInfobaseTool());
+        registry.register(new ProbeExtensionXmlContractTool());
+        registry.register(new ProbeExtensionSyncBridgeTool());
         registry.register(new GetApplicationsTool());
         registry.register(new UpdateDatabaseTool());
         registry.register(new GetOperationSnapshotTool());

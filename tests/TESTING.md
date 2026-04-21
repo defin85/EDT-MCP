@@ -65,6 +65,55 @@ coverage. Live task lifecycle, ownership, conflict control, sync compatibility,
 continuation have been manually verified against a real MCP client. Live detached infobase update
 continuation still does not have a dedicated runtime E2E suite.
 
+### Extension lifecycle live probe
+
+The extension lifecycle rollout currently has two live verification layers:
+
+- a repo-owned manual probe for the delivered discovery/inspection/fail-closed slice
+- a separate mutation proof for `apply_extension_to_infobase` that is still manual because it
+  requires controlled drift in the demo extension workspace
+
+```bash
+python tests/e2e/run_extension_lifecycle_probe.py \
+  --host "$(ip route | awk '/default/ {print $3; exit}')" \
+  --port 8766 \
+  --configuration-project 'Демонстрационная_конфигурация_Управляемое_приложение' \
+  --extension-project 'Демонстрационная_конфигурация_Управляемое_приложение.ВесТоваров' \
+  --expected-installed 'ВесТоваров,Колонтитулы'
+```
+
+Canonical live fixture for this probe:
+
+- EDT workspace: `E:\Projects\DemoEDT`
+- Configuration project: `Демонстрационная_конфигурация_Управляемое_приложение`
+- Extension projects:
+  - `Демонстрационная_конфигурация_Управляемое_приложение.ВесТоваров`
+  - `Демонстрационная_конфигурация_Управляемое_приложение.Колонтитулы`
+- Expected runtime target state before probing: `SYNCHRONIZED`, `EQUAL`, `UPDATED`
+- Expected verdict for the base probe:
+  - `get_extension_runtime_targets` succeeds
+  - `list_infobase_extensions` succeeds
+  - `check_extension_applicability` returns fail-closed
+    `extension_runtime_headless_unsafe`
+  - repeated `list_infobase_extensions` still succeeds after the applicability probe
+
+Additional live proof on the same fixture has been performed manually:
+
+- a controlled source edit in `...ВесТоваров/src/Documents/РасходТовара/ManagerModule.bsl`
+  moves the target to `INCREMENTAL_UPDATE_REQUIRED` / `NOT_EQUAL`
+- the same internal EDT sync path that now backs `apply_extension_to_infobase` then synchronizes
+  the extension back to `UPDATED` / `EQUAL`
+- cleanup by reverting the same edit and synchronizing through the same internal path also succeeds
+- the public `apply_extension_to_infobase` contract is live-verified on the same fixture:
+  - a bare `tools/call` returns `CreateTaskResult`
+  - `tasks/result` returns the final tool payload with related-task metadata
+  - the same controlled drift is observed by the tool as
+    `INCREMENTAL_UPDATE_REQUIRED / NOT_EQUAL`
+  - cleanup through the same public tool returns the fixture to `UPDATED / EQUAL`
+
+The scripted probe still verifies only the discovery/inspection/fail-closed boundary. The
+extension apply proof is live-verified but not yet packaged as a CI-ready E2E scenario.
+
 ## Test Configuration
 
 The `TestConfiguration/` directory contains a minimal 1C:Enterprise configuration for testing:
@@ -76,6 +125,9 @@ The `TestConfiguration/` directory contains a minimal 1C:Enterprise configuratio
 - **CommonAttribute.CommonAttribute** — common attribute
 - **Subsystem.Subsystem** — subsystem
 - **SessionParameter.SessionParameter** — session parameter
+
+The extension lifecycle live probe uses an external demo workspace loaded in EDT rather than a
+checked-in repository fixture.
 
 ## GitHub Actions
 

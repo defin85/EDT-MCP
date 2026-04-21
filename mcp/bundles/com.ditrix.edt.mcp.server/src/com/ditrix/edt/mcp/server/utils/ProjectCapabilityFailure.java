@@ -83,6 +83,39 @@ public final class ProjectCapabilityFailure
                 ProjectCapability.METADATA_READ);
     }
 
+    public static ValidationResult requireConfigurationProject(String projectName, String toolName, String detail)
+    {
+        return requireConfigurationProject(ProjectContextResolver.resolve(projectName), toolName, detail);
+    }
+
+    public static ValidationResult requireConfigurationProject(ResolvedProjectContext context, String toolName,
+            String detail)
+    {
+        if (context != null && context.isExtensionProject())
+        {
+            return new ValidationResult(context, configurationOnly(toolName, context, detail));
+        }
+        return new ValidationResult(context, null);
+    }
+
+    public static ValidationResult requireVerifiedExtensionSupport(String projectName, String toolName,
+            ProjectCapability requiredCapability, String detail)
+    {
+        return requireVerifiedExtensionSupport(ProjectContextResolver.resolve(projectName), toolName,
+                requiredCapability, detail);
+    }
+
+    public static ValidationResult requireVerifiedExtensionSupport(ResolvedProjectContext context, String toolName,
+            ProjectCapability requiredCapability, String detail)
+    {
+        if (context != null && context.isExtensionProject())
+        {
+            return new ValidationResult(context,
+                    unsupportedExtensionOperation(toolName, context, requiredCapability, detail));
+        }
+        return new ValidationResult(context, null);
+    }
+
     public String toJson()
     {
         ToolResult result = ToolResult.error(message)
@@ -137,5 +170,32 @@ public final class ProjectCapabilityFailure
             structured.put("requiredCapability", requiredCapability); //$NON-NLS-1$
         }
         return structured;
+    }
+
+    public static final class ValidationResult
+    {
+        private final ResolvedProjectContext context;
+        private final ProjectCapabilityFailure failure;
+
+        private ValidationResult(ResolvedProjectContext context, ProjectCapabilityFailure failure)
+        {
+            this.context = context;
+            this.failure = failure;
+        }
+
+        public ResolvedProjectContext getContext()
+        {
+            return context;
+        }
+
+        public ProjectCapabilityFailure getFailure()
+        {
+            return failure;
+        }
+
+        public boolean hasFailure()
+        {
+            return failure != null;
+        }
     }
 }

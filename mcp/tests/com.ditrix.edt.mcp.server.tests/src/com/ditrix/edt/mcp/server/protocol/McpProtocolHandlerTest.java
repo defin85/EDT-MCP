@@ -24,6 +24,7 @@ import com.ditrix.edt.mcp.server.progress.OperationProgressReporter;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.tools.IMcpTool.TaskSupport;
 import com.ditrix.edt.mcp.server.tools.McpToolRegistry;
+import com.ditrix.edt.mcp.server.tools.impl.ApplyExtensionToInfobaseTool;
 import com.ditrix.edt.mcp.server.tools.impl.CleanProjectTool;
 import com.ditrix.edt.mcp.server.tools.impl.DebugLaunchTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetProblemSummaryTool;
@@ -395,6 +396,23 @@ public class McpProtocolHandlerTest
         assertEquals(taskId,
                 taskPayload.getAsJsonObject("_meta").getAsJsonObject(McpConstants.META_RELATED_TASK) //$NON-NLS-1$
                         .get("taskId").getAsString()); //$NON-NLS-1$
+    }
+
+    @Test
+    public void testToolCallAutoPromotesBareApplyExtensionRequestIntoTask() throws Exception
+    {
+        registry.register(new StubTool(ApplyExtensionToInfobaseTool.NAME, "Async-first", "{\"type\":\"object\"}", //$NON-NLS-1$ //$NON-NLS-2$
+                TaskSupport.OPTIONAL));
+        installTestActivator(createTaskCapableServer());
+
+        String request = buildToolCallRequest(1, ApplyExtensionToInfobaseTool.NAME,
+                "{\"projectName\":\"EXT_001\",\"applicationId\":\"app-1\"}"); //$NON-NLS-1$ //$NON-NLS-2$
+        String response = handler.processRequest(request, "session-1", false, "json"); //$NON-NLS-1$ //$NON-NLS-2$
+
+        JsonObject json = parseResponse(response);
+        JsonObject result = json.getAsJsonObject("result"); //$NON-NLS-1$
+        assertNotNull(result);
+        assertTrue(result.has("task")); //$NON-NLS-1$
     }
 
     @Test

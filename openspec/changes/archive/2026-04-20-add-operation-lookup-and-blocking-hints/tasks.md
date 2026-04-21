@@ -25,7 +25,14 @@
 
 - [x] 4.1 Добавить focused unit coverage на `get_operation_snapshot`, not-found semantics и
       blocking hint correlation.
-- [ ] 4.2 Проверить live EDT flow: detached continuation lookup по `operationId` и busy-state
+- [x] 4.2 Проверить live EDT flow: detached continuation lookup по `operationId` и busy-state
       rejection с actionable blocker diagnostics.
-      Текущее локальное evidence gap: `curl -sf http://localhost:8765/health` завершился с code 7,
-      поэтому live server verification в этой сессии недоступен.
+      Live evidence получен на `E:\Projects\DemoEDT` через repo-scoped endpoint
+      `http://172.24.192.1:8766/mcp`: `clean_project` на
+      `Демонстрационная_конфигурация_Управляемое_приложение` был auto-promoted в task, отменён для
+      detached continuation, `tasks/result` вернул
+      `_meta["io.ditrix.edt.mcp/detached-continuation"]` с stable `operationId`, а subsequent
+      `get_operation_snapshot` вернул detached snapshot с `found: true`. На том же проекте
+      `get_project_errors` во время detached build вернул
+      `_meta["io.ditrix.edt.mcp/blocking-operation"]` с `reasonCode=project_build_in_progress`,
+      тем же `operationId` и `pollTool=get_operation_snapshot`.

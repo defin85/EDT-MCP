@@ -6,15 +6,11 @@
 
 package com.ditrix.edt.mcp.server.tools.impl;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IWorkspace;
 import org.eclipse.core.resources.ResourcesPlugin;
-import org.eclipse.emf.common.util.EMap;
 import org.eclipse.swt.widgets.Display;
 
 import com._1c.g5.v8.dt.core.platform.IConfigurationProject;
@@ -27,9 +23,8 @@ import com.ditrix.edt.mcp.server.Activator;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.utils.ConfigurationPropertiesSupport;
 import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
-import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
-import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to get 1C:Enterprise configuration properties.
@@ -84,12 +79,12 @@ public class GetConfigurationPropertiesTool implements IMcpTool
 
         if (projectName != null && !projectName.isEmpty())
         {
-            ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
-            if (context != null && context.isExtensionProject())
+            ProjectCapabilityFailure.ValidationResult validation = ProjectCapabilityFailure
+                    .requireConfigurationProject(projectName, NAME,
+                            "Extension-specific property semantics are not part of the configuration-properties contract yet."); //$NON-NLS-1$
+            if (validation.hasFailure())
             {
-                return ProjectCapabilityFailure.configurationOnly(NAME, context,
-                        "Extension-specific property semantics are not part of the configuration-properties contract yet.") //$NON-NLS-1$
-                        .toJson();
+                return validation.getFailure().toJson();
             }
         }
         
@@ -181,82 +176,9 @@ public class GetConfigurationPropertiesTool implements IMcpTool
                 return ToolResult.error("Configuration object not available").toJson(); //$NON-NLS-1$
             }
 
-            // Build result using ToolResult
-            ToolResult result = ToolResult.success()
-                .put("name", configuration.getName()) //$NON-NLS-1$
-                .put("synonym", toLocalizedMap(configuration.getSynonym())) //$NON-NLS-1$
-                .put("comment", configuration.getComment()); //$NON-NLS-1$
-            
-            // Script variant
-            if (configuration.getScriptVariant() != null)
-            {
-                result.put("scriptVariant", configuration.getScriptVariant().toString()); //$NON-NLS-1$
-            }
-            
-            // Default run mode
-            if (configuration.getDefaultRunMode() != null)
-            {
-                result.put("defaultRunMode", configuration.getDefaultRunMode().toString()); //$NON-NLS-1$
-            }
-            
-            // Data lock control mode
-            if (configuration.getDataLockControlMode() != null)
-            {
-                result.put("dataLockControlMode", configuration.getDataLockControlMode().toString()); //$NON-NLS-1$
-            }
-            
-            // Compatibility mode
-            if (configuration.getCompatibilityMode() != null)
-            {
-                result.put("compatibilityMode", configuration.getCompatibilityMode().toString()); //$NON-NLS-1$
-            }
-            
-            // Modal use mode
-            if (configuration.getModalityUseMode() != null)
-            {
-                result.put("modalityUseMode", configuration.getModalityUseMode().toString()); //$NON-NLS-1$
-            }
-            
-            // Interface compatibility mode
-            if (configuration.getInterfaceCompatibilityMode() != null)
-            {
-                result.put("interfaceCompatibilityMode", configuration.getInterfaceCompatibilityMode().toString()); //$NON-NLS-1$
-            }
-            
-            // Object autonumeration mode
-            if (configuration.getObjectAutonumerationMode() != null)
-            {
-                result.put("objectAutonumerationMode", configuration.getObjectAutonumerationMode().toString()); //$NON-NLS-1$
-            }
-            
-            // Use purposes (array of purposes)
-            List<String> usePurposes = new ArrayList<>();
-            if (configuration.getUsePurposes() != null)
-            {
-                for (Object purpose : configuration.getUsePurposes())
-                {
-                    usePurposes.add(purpose.toString());
-                }
-            }
-            result.put("usePurposes", usePurposes); //$NON-NLS-1$
-            
-            // Localized fields
-            result.put("briefInformation", toLocalizedMap(configuration.getBriefInformation())); //$NON-NLS-1$
-            result.put("detailedInformation", toLocalizedMap(configuration.getDetailedInformation())); //$NON-NLS-1$
-            result.put("vendor", configuration.getVendor()); //$NON-NLS-1$
-            result.put("version", configuration.getVersion()); //$NON-NLS-1$
-            result.put("copyright", toLocalizedMap(configuration.getCopyright())); //$NON-NLS-1$
-            result.put("vendorInformationAddress", toLocalizedMap(configuration.getVendorInformationAddress())); //$NON-NLS-1$
-            result.put("configurationInformationAddress", toLocalizedMap(configuration.getConfigurationInformationAddress())); //$NON-NLS-1$
-            
-            // Default language
-            if (configuration.getDefaultLanguage() != null)
-            {
-                result.put("defaultLanguage", configuration.getDefaultLanguage().getName()); //$NON-NLS-1$
-            }
-            
-            // Project name
-            result.put("projectName", configProject.getProject().getName()); //$NON-NLS-1$
+            ToolResult result = ConfigurationPropertiesSupport
+                    .putCommonConfigurationProperties(ToolResult.success(), configuration)
+                    .put("projectName", configProject.getProject().getName()); //$NON-NLS-1$
             
             return result.toJson();
         }
@@ -265,28 +187,5 @@ public class GetConfigurationPropertiesTool implements IMcpTool
             Activator.logError("Failed to get configuration properties", e); //$NON-NLS-1$
             return ToolResult.error(e.getMessage()).toJson();
         }
-    }
-    
-    /**
-     * Converts EMap to regular Map for JSON serialization.
-     */
-    @SuppressWarnings("rawtypes")
-    private static Map<String, String> toLocalizedMap(EMap localizedString)
-    {
-        Map<String, String> map = new HashMap<>();
-        if (localizedString != null)
-        {
-            for (Object entry : localizedString)
-            {
-                if (entry instanceof Map.Entry)
-                {
-                    Map.Entry e = (Map.Entry) entry;
-                    String key = e.getKey() != null ? e.getKey().toString() : ""; //$NON-NLS-1$
-                    String value = e.getValue() != null ? e.getValue().toString() : ""; //$NON-NLS-1$
-                    map.put(key, value);
-                }
-            }
-        }
-        return map;
     }
 }

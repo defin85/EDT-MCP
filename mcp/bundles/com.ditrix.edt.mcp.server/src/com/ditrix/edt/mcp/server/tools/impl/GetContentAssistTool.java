@@ -39,8 +39,6 @@ import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.ProjectCapability;
 import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
-import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
-import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
@@ -105,12 +103,12 @@ public class GetContentAssistTool implements IMcpTool
             return ToolResult.error("projectName is required").toJson(); //$NON-NLS-1$
         }
 
-        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
-        if (context != null && context.isExtensionProject())
+        ProjectCapabilityFailure.ValidationResult validation = ProjectCapabilityFailure
+                .requireVerifiedExtensionSupport(projectName, NAME, ProjectCapability.MODULE_READ,
+                        "Editor-backed semantic assistance is outside the verified extension matrix in this rollout."); //$NON-NLS-1$
+        if (validation.hasFailure())
         {
-            return ProjectCapabilityFailure.unsupportedExtensionOperation(NAME, context, ProjectCapability.MODULE_READ,
-                    "Editor-backed semantic assistance is outside the verified extension matrix in this rollout.") //$NON-NLS-1$
-                    .toJson();
+            return validation.getFailure().toJson();
         }
         
         if (filePath == null || filePath.isEmpty())

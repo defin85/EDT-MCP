@@ -3,8 +3,8 @@
 
 Этот файл генерируется из `tools/impl/*Tool.java` и служит fast reference для Codex.
 
-- Tool implementations found: `36`
-- Tool names documented in `README.md`: `36`
+- Tool implementations found: `43`
+- Tool names documented in `README.md`: `43`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
 ## Tool Map
@@ -12,6 +12,8 @@
 | Tool | Implementation | Primary tests | Zone | Notes |
 |------|----------------|---------------|------|-------|
 | `add_metadata_attribute` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/AddMetadataAttributeTool.java` | `-` | `mutation/refactoring` | - |
+| `apply_extension_to_infobase` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ApplyExtensionToInfobaseTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/ApplyExtensionToInfobaseToolTest.java` | `mixed` | - |
+| `check_extension_applicability` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/CheckExtensionApplicabilityTool.java` | `-` | `mixed` | - |
 | `clean_project` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/CleanProjectTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `debug_launch` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/DebugLaunchTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `delete_metadata_object` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/DeleteMetadataObjectTool.java` | `-` | `mutation/refactoring` | - |
@@ -23,6 +25,8 @@
 | `get_configuration_properties` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetConfigurationPropertiesTool.java` | `-` | `read/discovery` | - |
 | `get_content_assist` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetContentAssistTool.java` | `-` | `read/discovery` | - |
 | `get_edt_version` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetEdtVersionTool.java` | `-` | `read/discovery` | - |
+| `get_extension_properties` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetExtensionPropertiesTool.java` | `-` | `read/discovery` | - |
+| `get_extension_runtime_targets` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetExtensionRuntimeTargetsTool.java` | `-` | `read/discovery` | - |
 | `get_form_screenshot` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetFormScreenshotTool.java` | `-` | `read/discovery` | - |
 | `get_metadata_details` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetMetadataDetailsTool.java` | `-` | `read/discovery` | - |
 | `get_metadata_objects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetMetadataObjectsTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetMetadataObjectsToolTest.java` | `read/discovery` | - |
@@ -37,8 +41,11 @@
 | `get_tags` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTagsTool.java` | `-` | `read/discovery` | - |
 | `get_tasks` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTasksTool.java` | `-` | `read/discovery` | - |
 | `go_to_definition` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GoToDefinitionTool.java` | `-` | `analysis/navigation` | - |
+| `list_infobase_extensions` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListInfobaseExtensionsTool.java` | `-` | `read/discovery` | - |
 | `list_modules` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListModulesTool.java` | `-` | `read/discovery` | - |
 | `list_projects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListProjectsTool.java` | `-` | `read/discovery` | - |
+| `probe_extension_sync_bridge` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeExtensionSyncBridgeTool.java` | `-` | `mixed` | - |
+| `probe_extension_xml_contract` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeExtensionXmlContractTool.java` | `-` | `mixed` | - |
 | `read_method_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ReadMethodSourceTool.java` | `-` | `mixed` | - |
 | `read_module_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ReadModuleSourceTool.java` | `-` | `mixed` | - |
 | `rename_metadata_object` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RenameMetadataObjectTool.java` | `-` | `mutation/refactoring` | - |

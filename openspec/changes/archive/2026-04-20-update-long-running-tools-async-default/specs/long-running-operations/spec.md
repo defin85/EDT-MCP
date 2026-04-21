@@ -20,6 +20,8 @@ mutable tools: `update_database`, `clean_project`, and full-project `revalidate_
 - **THEN** the server executes the request as task-backed work
 - **AND** the final payload can be retrieved later through task result APIs in the same MCP session
 
+## ADDED Requirements
+
 ### Requirement: No Legacy Sync Mode For Async-First Tools
 
 The system SHALL not expose legacy synchronous execution for the async-first tool set:

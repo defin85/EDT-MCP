@@ -39,15 +39,25 @@ public final class BuildUtils
      */
     public static void waitForBuildJobs(IProgressMonitor monitor)
     {
+        waitForBuildJobs(monitor, null);
+    }
+
+    public static void waitForBuildJobs(IProgressMonitor monitor, String diagnosticLabel)
+    {
+        long startedAt = System.nanoTime();
         try
         {
+            logDiagnostic(diagnosticLabel, "waiting for build jobs"); //$NON-NLS-1$
             IJobManager jobManager = Job.getJobManager();
             jobManager.join(ResourcesPlugin.FAMILY_AUTO_BUILD, monitor);
             jobManager.join(ResourcesPlugin.FAMILY_MANUAL_BUILD, monitor);
+            logDiagnostic(diagnosticLabel, "build jobs completed in " + elapsedMillis(startedAt) + "ms"); //$NON-NLS-1$ //$NON-NLS-2$
         }
         catch (InterruptedException e)
         {
             Thread.currentThread().interrupt();
+            logDiagnostic(diagnosticLabel,
+                    "build jobs wait interrupted after " + elapsedMillis(startedAt) + "ms"); //$NON-NLS-1$ //$NON-NLS-2$
             Activator.logError("Wait for build jobs interrupted", e); //$NON-NLS-1$
         }
     }
@@ -64,7 +74,12 @@ public final class BuildUtils
      */
     public static void waitForBuildAndDerivedData(IProject project, IProgressMonitor monitor)
     {
-        waitForBuildAndDerivedData(project, DEFAULT_DD_TIMEOUT_MS, monitor);
+        waitForBuildAndDerivedData(project, DEFAULT_DD_TIMEOUT_MS, monitor, null);
+    }
+
+    public static void waitForBuildAndDerivedData(IProject project, IProgressMonitor monitor, String diagnosticLabel)
+    {
+        waitForBuildAndDerivedData(project, DEFAULT_DD_TIMEOUT_MS, monitor, diagnosticLabel);
     }
     
     /**
@@ -80,14 +95,22 @@ public final class BuildUtils
      */
     public static void waitForBuildAndDerivedData(IProject project, long timeoutMs, IProgressMonitor monitor)
     {
+        waitForBuildAndDerivedData(project, timeoutMs, monitor, null);
+    }
+
+    public static void waitForBuildAndDerivedData(IProject project, long timeoutMs, IProgressMonitor monitor,
+            String diagnosticLabel)
+    {
+        long startedAt = System.nanoTime();
         // Step 1: Wait for standard build jobs to complete scheduling
-        waitForBuildJobs(monitor);
+        waitForBuildJobs(monitor, diagnosticLabel);
         
         // Step 2: Wait for derived data computations (validation, form dd, etc.)
         if (project != null)
         {
-            waitForDerivedData(project, timeoutMs);
+            waitForDerivedData(project, timeoutMs, diagnosticLabel);
         }
+        logDiagnostic(diagnosticLabel, "build and derived-data wait completed in " + elapsedMillis(startedAt) + "ms"); //$NON-NLS-1$ //$NON-NLS-2$
     }
     
     /**
@@ -98,7 +121,7 @@ public final class BuildUtils
      */
     public static boolean waitForDerivedData(IProject project)
     {
-        return waitForDerivedData(project, DEFAULT_DD_TIMEOUT_MS);
+        return waitForDerivedData(project, DEFAULT_DD_TIMEOUT_MS, null);
     }
     
     /**
@@ -110,6 +133,12 @@ public final class BuildUtils
      */
     public static boolean waitForDerivedData(IProject project, long timeoutMs)
     {
+        return waitForDerivedData(project, timeoutMs, null);
+    }
+
+    public static boolean waitForDerivedData(IProject project, long timeoutMs, String diagnosticLabel)
+    {
+        long startedAt = System.nanoTime();
         try
         {
             IDerivedDataManagerProvider ddProvider = Activator.getDefault().getDerivedDataManagerProvider();
@@ -144,22 +173,47 @@ public final class BuildUtils
             
             // Wait for all derived data computations
             Activator.logInfo("Waiting for derived data computations for: " + project.getName()); //$NON-NLS-1$
+            logDiagnostic(diagnosticLabel,
+                    "waiting for derived data for " + project.getName() + " timeoutMs=" + timeoutMs); //$NON-NLS-1$ //$NON-NLS-2$
             boolean completed = ddManager.waitAllComputations(timeoutMs);
             
             if (completed)
             {
                 Activator.logInfo("Derived data computations completed for: " + project.getName()); //$NON-NLS-1$
+                logDiagnostic(diagnosticLabel,
+                        "derived data completed for " + project.getName() + " in " + elapsedMillis(startedAt) //$NON-NLS-1$ //$NON-NLS-2$
+                                + "ms"); //$NON-NLS-1$
             }
             else
             {
                 Activator.logInfo("Derived data wait timed out for: " + project.getName()); //$NON-NLS-1$
+                logDiagnostic(diagnosticLabel,
+                        "derived data wait timed out for " + project.getName() + " after " //$NON-NLS-1$ //$NON-NLS-2$
+                                + elapsedMillis(startedAt) + "ms"); //$NON-NLS-1$
             }
             return completed;
         }
         catch (Exception e)
         {
+            logDiagnostic(diagnosticLabel,
+                    "derived data wait failed for " + (project != null ? project.getName() : "<null>") + " after " //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                            + elapsedMillis(startedAt) + "ms"); //$NON-NLS-1$
             Activator.logError("Error waiting for derived data", e); //$NON-NLS-1$
             return false;
         }
+    }
+
+    private static void logDiagnostic(String diagnosticLabel, String message)
+    {
+        if (diagnosticLabel == null || diagnosticLabel.isBlank())
+        {
+            return;
+        }
+        Activator.logInfo("[diag] " + diagnosticLabel + " :: " + message); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    private static long elapsedMillis(long startedAt)
+    {
+        return (System.nanoTime() - startedAt) / 1_000_000L;
     }
 }

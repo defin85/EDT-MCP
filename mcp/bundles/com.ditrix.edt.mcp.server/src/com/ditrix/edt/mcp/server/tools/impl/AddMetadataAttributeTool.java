@@ -47,8 +47,6 @@ import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectCapability;
 import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
-import com.ditrix.edt.mcp.server.utils.ProjectContextResolver;
-import com.ditrix.edt.mcp.server.utils.ResolvedProjectContext;
 
 /**
  * Tool to add a new attribute to a metadata object.
@@ -139,13 +137,12 @@ public class AddMetadataAttributeTool implements IMcpTool
 
     private String executeInternal(String projectName, String parentFqn, String attributeName)
     {
-        ResolvedProjectContext context = ProjectContextResolver.resolve(projectName);
-        if (context != null && context.isExtensionProject())
+        ProjectCapabilityFailure.ValidationResult validation = ProjectCapabilityFailure
+                .requireVerifiedExtensionSupport(projectName, NAME, ProjectCapability.MUTATION_REFACTOR,
+                        "Write/refactor flows stay guarded until extension mutation support is verified."); //$NON-NLS-1$
+        if (validation.hasFailure())
         {
-            return ProjectCapabilityFailure.unsupportedExtensionOperation(NAME, context,
-                    ProjectCapability.MUTATION_REFACTOR,
-                    "Write/refactor flows stay guarded until extension mutation support is verified.") //$NON-NLS-1$
-                    .toJson();
+            return validation.getFailure().toJson();
         }
 
         // Get project

@@ -19,7 +19,7 @@ MCP (Model Context Protocol) server plugin for 1C:EDT, enabling AI assistants (C
 - 🚀 **Application Management** - Get applications, update database, launch in debug mode
 - 🎯 **Status Bar** - Real-time server status with stage-aware progress, elapsed time, and interactive controls
 - ⚡ **Interruptible Operations** - Cancel long-running operations and send signals to AI agent
-- 📡 **Progress Reporting** - `update_database` can publish MCP `notifications/progress`, with `get_operation_snapshot` for exact polling and `get_active_operation` as focused fallback
+- 📡 **Progress Reporting** - `update_database` and `apply_extension_to_infobase` can publish MCP `notifications/progress`, with `get_operation_snapshot` for exact polling and `get_active_operation` as focused fallback
 - 🏷️ **Metadata Tags** - Organize objects with custom tags, filter Navigator, keyboard shortcuts (Ctrl+Alt+1-0), multiselect support
 - 📁 **Metadata Groups** - Create custom folder hierarchy in Navigator tree per metadata collection
 - ✏️ **Metadata Refactoring** - Rename/delete metadata objects with full cascading updates across BSL code, forms and metadata; add new attributes to existing objects
@@ -154,14 +154,15 @@ Note: The EDT operation may still be running in background.
 
 ### Progress Reporting For Long Operations
 
-`update_database`, `clean_project`, and full-project `revalidate_objects` publish the same runtime
+`update_database`, `apply_extension_to_infobase`, `clean_project`, and full-project
+`revalidate_objects` publish the same runtime
 progress model to both EDT UI and MCP clients.
 
 - The status bar keeps showing the active EDT operation even after **Continue in Background** interrupted the HTTP call.
 - MCP `notifications/progress` are sent only when the client provided `_meta.progressToken` in the original `tools/call` request and has an SSE stream attached to the same `MCP-Session-Id`.
 - When EDT work survives the original task/call lifetime, `get_operation_snapshot` can return the detached snapshot for the stable `operationId`, while `get_active_operation` remains the focused fallback projection with `detached: true` and structured `details`.
 - Detached continuation relies on `get_operation_snapshot` plus the EDT status bar; the original `progressToken` is not kept alive after the MCP task/call becomes terminal.
-- For `update_database`, `clean_project`, and full-project `revalidate_objects`, a bare call now returns task creation metadata; the final payload is retrieved later through `tasks/result` in the same MCP session.
+- For `update_database`, `apply_extension_to_infobase`, `clean_project`, and full-project `revalidate_objects`, a bare call now returns task creation metadata; the final payload is retrieved later through `tasks/result` in the same MCP session.
 - Sync-only tools still return the normal final tool result directly when clients ignore progress notifications.
 - `get_active_operation` can still be used as a polling fallback when a client does not support or does not consume `notifications/progress`.
 - Busy project/application rejections now include `_meta["io.ditrix.edt.mcp/blocking-operation"]` with stable reason codes, scope identifiers, and exact `operationId` hints when correlation is unambiguous.
@@ -206,11 +207,11 @@ The server now exposes experimental MCP Tasks support for long-running tool exec
 
 - `initialize` advertises `capabilities.tasks.list`, `capabilities.tasks.cancel`, and `capabilities.tasks.requests.tools.call`
 - `tools/list` exposes `execution.taskSupport` for every tool
-- `update_database` and `clean_project` keep `execution.taskSupport: "optional"` and are async-first at runtime: bare calls auto-promote into task-backed execution
+- `update_database`, `apply_extension_to_infobase`, and `clean_project` keep `execution.taskSupport: "optional"` and are async-first at runtime: bare calls auto-promote into task-backed execution
 - `revalidate_objects` keeps `execution.taskSupport: "optional"` and is async-first only for full-project revalidation; partial object revalidation stays synchronous and task-augmented partial requests are rejected with an actionable error
 - `tasks/get`, `tasks/list`, `tasks/result`, and `tasks/cancel` are available over the same `/mcp` endpoint
 - Follow-up `tasks/get`, `tasks/result`, and `tasks/cancel` calls must use the same `MCP-Session-Id` that created the task
-- The original `_meta.progressToken` stays valid for task-backed `update_database`, `clean_project`, and full-project `revalidate_objects` calls while the task is live; after a terminal MCP outcome, detached continuation moves to `get_operation_snapshot` for exact polling by `operationId`
+- The original `_meta.progressToken` stays valid for task-backed `update_database`, `apply_extension_to_infobase`, `clean_project`, and full-project `revalidate_objects` calls while the task is live; after a terminal MCP outcome, detached continuation moves to `get_operation_snapshot` for exact polling by `operationId`
 - When cancellation can leave EDT work running in background, terminal sync/task payloads include `_meta["io.ditrix.edt.mcp/detached-continuation"]` with the stable `operationId` and `pollTool: "get_operation_snapshot"`
 - Busy project/application rejections may include `_meta["io.ditrix.edt.mcp/blocking-operation"]` with `reasonCode`, `scope`, `projectName`, known application identifiers, and exact polling hints when the blocker maps to a single tracked operation
 - Conflicting mutable task-backed operations are rejected explicitly instead of running in unsafe parallel
@@ -363,6 +364,13 @@ Add to `claude_desktop_config.json`:
 | `add_metadata_attribute` | Add a new attribute to a metadata object (Catalog, Document, Register, etc.); extension write/refactor remains guarded |
 | `get_tags` | Get list of all tags defined in the project with descriptions and object counts |
 | `get_objects_by_tags` | Get metadata objects filtered by tags with tag descriptions and object FQNs |
+| `get_extension_properties` | Get extension-project root properties through the extension-aware EDT project model |
+| `get_extension_runtime_targets` | Resolve parent configuration project and available infobase applications for an extension project |
+| `list_infobase_extensions` | List configuration extensions installed in a selected infobase target for an extension project |
+| `check_extension_applicability` | Check whether the selected infobase target can apply the workspace extension |
+| `apply_extension_to_infobase` | Apply an extension project to a selected infobase target via the dedicated extension lifecycle flow; async-first at runtime |
+| `probe_extension_sync_bridge` | Developer-oriented probe: invoke the internal EDT synchronization bridge for an extension project on a selected target |
+| `probe_extension_xml_contract` | Developer-oriented probe: compare the workspace `src` tree with EDT XML export layout for a selected extension target |
 | `get_applications` | Get list of applications (infobases) for a project with update state; configuration-only in this rollout |
 | `update_database` | Update database (infobase) with full or incremental update mode; async-first at runtime, explicit task augmentation, and configuration-only extension rejection |
 | `get_operation_snapshot` | Get the progress snapshot for a specific tracked long-running operation by `operationId` |
@@ -399,15 +407,52 @@ Verified first-wave extension support in this rollout:
 - `get_module_structure`
 - `search_in_code`
 
+Experimental extension lifecycle discovery/runtime surface in this rollout:
+
+- `get_extension_properties`
+- `get_extension_runtime_targets`
+- `list_infobase_extensions`
+- `check_extension_applicability`
+- `apply_extension_to_infobase`
+- `probe_extension_sync_bridge` (developer-oriented internal sync probe)
+- `probe_extension_xml_contract` (developer-oriented XML contract probe)
+
+The runtime-side extension lifecycle tools use a split safety model:
+
+- `list_infobase_extensions` enters the EDT runtime only after infobase-access preflight and fails
+  with a dedicated busy category instead of hanging the transport when a previous bridge probe got
+  stuck
+- `check_extension_applicability` is intentionally fail-closed in MCP because live testing showed
+  that the current EDT applicability-check path can open interactive infobase-access dialogs and
+  destabilize the runtime bridge
+- `apply_extension_to_infobase` does not use the unsafe public applicability/XML path as its
+  execution backend; it uses the verified internal EDT synchronization bridge
+  (`IInfobaseSynchronizationManager.updateInfobase` / `reloadInfobase`) on the extension project
+  and stays on the existing task/progress runtime surface
+- `probe_extension_sync_bridge` is the developer-oriented companion for that backend: it exists to
+  prove or diagnose the internal synchronization path on a disposable target before widening the
+  public lifecycle contract
+- `probe_extension_xml_contract` is a guarded diagnostics tool: it exports the selected extension
+  through EDT XML export APIs and compares the exported layout with the workspace `src` tree; this
+  is meant for implementation proof and staging decisions, not for regular lifecycle automation
+
 Stable extension failure categories:
 
 - `configuration_only`: runtime/application flows and `get_configuration_properties` stay configuration-only
 - `unsupported_extension_operation`: the tool is outside the verified extension matrix for this rollout
 - `extension_model_unavailable`: EDT did not provide the extension-compatible metadata or BSL model needed by a supported read path
+- `extension_parent_missing`: the extension project has no usable parent configuration project for runtime routing
+- `extension_target_not_found`: the requested runtime target application could not be resolved
+- `extension_runtime_service_unavailable`: EDT runtime execution services are not available in the current environment
+- `extension_runtime_access_settings_required`: the selected infobase target is missing valid access settings for the EDT runtime bridge
+- `extension_runtime_bridge_busy`: the extension runtime bridge is already busy or a previous probe timed out and EDT should be restarted before retry
+- `extension_runtime_headless_unsafe`: the current EDT runtime path is intentionally disabled for MCP because it is not headless-safe
+- `extension_runtime_check_failed`: the runtime-side inspection/check command failed while talking to Designer/thick client
+- `extension_apply_failed`: the dedicated extension apply flow failed while synchronizing the extension project to the target infobase
 
 Current non-goals for extension projects in this rollout:
 
-- no extension lifecycle/runtime flows: `get_applications`, `update_database`, `debug_launch`
+- no extension debug-launch flow: `get_applications`, `update_database`, and `debug_launch` remain configuration-only legacy tools
 - no extension configuration-properties contract: `get_configuration_properties`
 - no extension mutation/refactor flows: `add_metadata_attribute`, `rename_metadata_object`, `delete_metadata_object`, `write_module_source`
 - no advanced semantic navigation outside the verified matrix: `find_references`, `go_to_definition`, `get_method_call_hierarchy`, `get_symbol_info`, `get_content_assist`
@@ -642,6 +687,108 @@ Current non-goals for extension projects in this rollout:
 - Summary with total objects found
 
 ### Application Management Tools
+
+#### Get Extension Properties Tool
+
+**`get_extension_properties`** - Get extension-project root configuration properties through EDT's extension-aware project model.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | Extension project name |
+
+#### Get Extension Runtime Targets Tool
+
+**`get_extension_runtime_targets`** - Resolve the parent configuration project and available infobase applications for an extension project.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | Extension project name |
+
+#### List Infobase Extensions Tool
+
+**`list_infobase_extensions`** - List configuration extensions currently installed in a selected infobase target for an extension project.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | Extension project name |
+| `applicationId` | Yes | Application ID from `get_extension_runtime_targets` |
+
+**Notes:**
+- Fails with `extension_runtime_access_settings_required` if EDT has no valid stored infobase access settings for that target
+- Fails with `extension_runtime_bridge_busy` instead of hanging if a previous runtime probe wedged the EDT bridge; restart EDT before retrying
+
+#### Check Extension Applicability Tool
+
+**`check_extension_applicability`** - Check whether the selected infobase target can apply the workspace extension.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | Extension project name |
+| `applicationId` | Yes | Application ID from `get_extension_runtime_targets` |
+
+**Notes:**
+- Returns `applicable=false` with `extension_runtime_headless_unsafe`
+- Does not enter the EDT runtime bridge from MCP because live testing showed that the current
+  applicability-check path can open interactive infobase-access dialogs and wedge the bridge
+
+#### Apply Extension To Infobase Tool
+
+**`apply_extension_to_infobase`** - Apply an extension project to a selected infobase target through the dedicated extension lifecycle flow.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | Extension project name |
+| `applicationId` | Yes | Application ID from `get_extension_runtime_targets` |
+| `fullReload` | No | If `true`, use full reload instead of incremental synchronization (default: `false`) |
+| `autoRestructure` | No | Automatically apply restructurization if needed (default: `true`) |
+
+**Notes:**
+- Async-first at runtime: bare calls auto-promote into task-backed execution, and the final result is retrieved through `tasks/result`
+- Uses the internal EDT synchronization bridge on the extension project rather than the unsafe public applicability/XML path
+- Conflicts with mutable synchronization work on the same parent configuration target through task scheduling and busy-state diagnostics
+
+#### Probe Extension Sync Bridge Tool
+
+**`probe_extension_sync_bridge`** - Developer-oriented probe that invokes the internal EDT synchronization bridge for an extension project on a selected target.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | Extension project name |
+| `applicationId` | Yes | Application ID from `get_extension_runtime_targets` |
+| `fullReload` | No | Use `reloadInfobase` instead of incremental `updateInfobase` (default: `false`) |
+| `autoConfirmRestructure` | No | Automatically confirm database restructurization if EDT asks for it (default: `false`) |
+| `allowDrift` | No | Allow probing when the target is not already `UPDATED` (default: `false`) |
+| `timeoutSeconds` | No | Guard timeout in seconds for the probe (default: `30`, max: `300`) |
+
+**Notes:**
+- Intended for live proof and diagnostics of the internal synchronization path, not for normal client automation
+- With `allowDrift=false`, it fails closed on `INCREMENTAL_UPDATE_REQUIRED` / `FULL_UPDATE_REQUIRED` targets instead of mutating them
+- This is the developer-facing proof surface behind the public `apply_extension_to_infobase` contract
+
+#### Probe Extension XML Contract Tool
+
+**`probe_extension_xml_contract`** - Developer-oriented probe that exports the selected extension
+from a target infobase via EDT XML export APIs and compares the exported directory tree with the
+workspace `src` layout.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | Extension project name |
+| `applicationId` | Yes | Application ID from `get_extension_runtime_targets` |
+| `sampleLimit` | No | Maximum number of sample paths per diff bucket (default: 20, max: 100) |
+| `cleanupExport` | No | Delete the temporary exported XML tree after comparison (default: false) |
+
+**Notes:**
+- Uses `exportConfigurationToXml(..., HIERARCHICAL, PLAIN_FILES)` under the same guarded runtime bridge as `list_infobase_extensions`
+- Intended for implementation proof and diagnostics; it does not apply or mutate the infobase
+- Current live demo evidence shows that EDT workspace `src` does not match the XML export/import layout directly, so a future apply flow needs a separate export/staging adapter
 
 #### Get Applications Tool
 
@@ -899,7 +1046,7 @@ Typical stages:
 ### Output Formats
 
 - **Markdown tools**: return Markdown as EmbeddedResource with `mimeType: text/markdown`; selected tools can additionally attach additive `structuredContent` for deterministic discovery or stable failure categories (`list_projects` is the primary discovery example)
-- **JSON tools**: `get_configuration_properties`, `clean_project`, `revalidate_objects` - return JSON with `structuredContent`
+- **JSON tools**: `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects` - return JSON with `structuredContent`
 - **Text tools**: `get_edt_version` - return plain text
 
 </details>
