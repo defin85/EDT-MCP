@@ -59,8 +59,8 @@ python tests/e2e/run_e2e_tests.py --junit-xml results.xml
 | Advanced | find_references, get_applications, get_form_screenshot |
 
 Task capability advertisement, per-tool `execution.taskSupport`, task registry/scheduling behavior,
-detached continuation metadata, and detached snapshot reporter semantics now have checked-in unit
-coverage. Live task lifecycle, ownership, conflict control, sync compatibility,
+detached continuation metadata, detached snapshot reporter semantics, and focused infobase detached
+projection mapping now have checked-in unit coverage. Live task lifecycle, ownership, conflict control, sync compatibility,
 `notifications/progress`, compatibility polling through `get_active_operation`, and detached rebuild
 continuation have been manually verified against a real MCP client. Live detached infobase update
 continuation still does not have a dedicated runtime E2E suite.

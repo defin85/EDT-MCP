@@ -63,14 +63,29 @@ public class DetachedContinuationMetaTest
     }
 
     @Test
-    public void testShouldExposeForCancellationKeepsUpdateDatabaseConservativeForLocalizedStage()
+    public void testShouldExposeForCancellationAcceptsLocalizedUpdateProgressStage()
     {
         OperationProgressReporter reporter = new OperationProgressReporter();
         reporter.start("task-2", "update_database", "update_start", "Starting update", null, null, null); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+        reporter.indeterminate("waiting_for_edt", "Waiting for EDT synchronization to finish"); //$NON-NLS-1$ //$NON-NLS-2$
         reporter.stage("Экспорт файла: Ext\\\\ParentConfigurations.bin", //$NON-NLS-1$
                 "Экспорт файла: Ext\\\\ParentConfigurations.bin"); //$NON-NLS-1$
 
         OperationProgressState snapshot = reporter.snapshot();
-        assertFalse(DetachedContinuationMeta.shouldExposeForCancellation("update_database", snapshot)); //$NON-NLS-1$
+        assertTrue(DetachedContinuationMeta.shouldExposeForCancellation("update_database", snapshot)); //$NON-NLS-1$
+    }
+
+    @Test
+    public void testShouldExposeForCancellationKeepsFailureStageWhenRecentUpdateProgressExists()
+    {
+        OperationProgressReporter reporter = new OperationProgressReporter();
+        reporter.start("task-3", "update_database", "update_start", "Starting update", null, null, null); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+        reporter.indeterminate("waiting_for_edt", "Waiting for EDT synchronization to finish"); //$NON-NLS-1$ //$NON-NLS-2$
+        reporter.stage("Экспорт файла: Ext\\\\Configuration.bin", "Экспорт файла: Ext\\\\Configuration.bin"); //$NON-NLS-1$ //$NON-NLS-2$
+        reporter.stage("failure", "Database update cancelled"); //$NON-NLS-1$ //$NON-NLS-2$
+        reporter.cancelled("Database update cancelled"); //$NON-NLS-1$
+
+        OperationProgressState snapshot = reporter.snapshot();
+        assertTrue(DetachedContinuationMeta.shouldExposeForCancellation("update_database", snapshot)); //$NON-NLS-1$
     }
 }

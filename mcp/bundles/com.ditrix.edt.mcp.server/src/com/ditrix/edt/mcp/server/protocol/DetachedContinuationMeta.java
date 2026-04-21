@@ -6,8 +6,10 @@
 
 package com.ditrix.edt.mcp.server.protocol;
 
+import java.util.List;
 import java.util.Set;
 
+import com.ditrix.edt.mcp.server.progress.ProgressEvent;
 import com.ditrix.edt.mcp.server.progress.OperationProgressState;
 import com.ditrix.edt.mcp.server.tools.impl.GetOperationSnapshotTool;
 import com.google.gson.JsonElement;
@@ -43,6 +45,11 @@ public final class DetachedContinuationMeta
             "update_start", //$NON-NLS-1$
             "waiting_for_edt", //$NON-NLS-1$
             "final_state_check"); //$NON-NLS-1$
+    private static final Set<String> UPDATE_DATABASE_NON_CONTINUATION_STAGES = Set.of(
+            "validation", //$NON-NLS-1$
+            "sync_state_check", //$NON-NLS-1$
+            "completion", //$NON-NLS-1$
+            "failure"); //$NON-NLS-1$
 
     private DetachedContinuationMeta()
     {
@@ -99,6 +106,8 @@ public final class DetachedContinuationMeta
                 return !CLEAN_PROJECT_PRE_START_STAGES.contains(stage);
             case "revalidate_objects": //$NON-NLS-1$
                 return !REVALIDATE_PRE_START_STAGES.contains(stage);
+            case "update_database": //$NON-NLS-1$
+                return shouldExposeUpdateDatabaseCancellation(progressState);
             default:
                 return false;
         }
@@ -126,5 +135,45 @@ public final class DetachedContinuationMeta
     private static boolean hasText(String value)
     {
         return value != null && !value.isBlank();
+    }
+
+    private static boolean shouldExposeUpdateDatabaseCancellation(OperationProgressState progressState)
+    {
+        String stage = progressState.getStage();
+        if (shouldExposeForCancellation("update_database", stage)) //$NON-NLS-1$
+        {
+            return true;
+        }
+        if (hasText(stage) && !UPDATE_DATABASE_NON_CONTINUATION_STAGES.contains(stage))
+        {
+            return true;
+        }
+        return hasUpdateDatabaseContinuationEvidence(progressState.getRecentEvents());
+    }
+
+    private static boolean hasUpdateDatabaseContinuationEvidence(List<ProgressEvent> recentEvents)
+    {
+        if (recentEvents == null || recentEvents.isEmpty())
+        {
+            return false;
+        }
+        for (int i = recentEvents.size() - 1; i >= 0; i--)
+        {
+            ProgressEvent event = recentEvents.get(i);
+            if (event == null)
+            {
+                continue;
+            }
+            String stage = event.getStage();
+            if (shouldExposeForCancellation("update_database", stage)) //$NON-NLS-1$
+            {
+                return true;
+            }
+            if (hasText(stage) && !UPDATE_DATABASE_NON_CONTINUATION_STAGES.contains(stage))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }

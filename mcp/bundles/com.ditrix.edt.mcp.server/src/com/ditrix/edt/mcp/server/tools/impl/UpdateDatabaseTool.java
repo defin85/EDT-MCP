@@ -419,7 +419,6 @@ public class UpdateDatabaseTool implements IMcpTool
     private String cancelled(OperationProgressReporter reporter)
     {
         String message = "Database update cancelled"; //$NON-NLS-1$
-        reporter.stage(STAGE_FAILURE, message);
         reporter.cancelled(message);
         return ToolResult.error(message).toJson();
     }

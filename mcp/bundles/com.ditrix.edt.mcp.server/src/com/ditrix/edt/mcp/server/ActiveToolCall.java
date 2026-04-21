@@ -217,7 +217,7 @@ public class ActiveToolCall
         {
             return;
         }
-        if (!DetachedContinuationMeta.shouldExposeForCancellation(toolName, snapshot.getStage()))
+        if (!DetachedContinuationMeta.shouldExposeForCancellation(toolName, snapshot))
         {
             return;
         }
