@@ -137,6 +137,7 @@ class TestRunner:
         # Phase 2: Tools (no project needed)
         self._section("Standalone Tools")
         self._test("get_edt_version", self.test_get_edt_version)
+        self._test("get_server_build_info", self.test_get_server_build_info)
         self._test("list_projects", self.test_list_projects)
         self._test("get_platform_documentation", self.test_get_platform_documentation)
         self._test("get_check_description", self.test_get_check_description)
@@ -282,7 +283,7 @@ class TestRunner:
         assert len(tools) > 0, "No tools registered"
         names = [t["name"] for t in tools]
         # Verify core tools exist
-        for tool in ["get_edt_version", "list_projects", "get_metadata_objects"]:
+        for tool in ["get_edt_version", "get_server_build_info", "list_projects", "get_metadata_objects"]:
             assert tool in names, f"Missing tool: {tool}"
 
     def test_invalid_method(self):
@@ -317,6 +318,23 @@ class TestRunner:
         self._assert_success(resp)
         text = self._get_result_text(resp)
         assert len(text) > 0, "Empty EDT version"
+
+    def test_get_server_build_info(self):
+        resp = self._call("get_server_build_info")
+        self._assert_success(resp)
+        payload = self._get_structured_content(resp)
+        assert isinstance(payload, dict), f"Expected structured JSON, got: {payload!r}"
+        for field in [
+            "serverName",
+            "bundleSymbolicName",
+            "bundleVersion",
+            "buildQualifier",
+            "pluginVersion",
+            "protocolVersion",
+            "edtVersion",
+        ]:
+            assert field in payload, f"Missing build info field: {field}"
+            assert str(payload[field]), f"Empty build info field: {field}"
 
     def test_list_projects(self):
         resp = self._call("list_projects")

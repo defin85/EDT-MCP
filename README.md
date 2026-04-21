@@ -345,6 +345,7 @@ Add to `claude_desktop_config.json`:
 | Tool | Description |
 |------|-------------|
 | `get_edt_version` | Returns current EDT version |
+| `get_server_build_info` | Returns exact EDT-MCP runtime build information from installed OSGi bundle metadata |
 | `list_projects` | Lists workspace projects with project kind, capability hints, and extension metadata |
 | `get_configuration_properties` | Gets 1C configuration properties (configuration-only in this rollout) |
 | `get_project_errors` | Returns EDT problems with severity/checkId/objects filters |
@@ -1046,7 +1047,7 @@ Typical stages:
 ### Output Formats
 
 - **Markdown tools**: return Markdown as EmbeddedResource with `mimeType: text/markdown`; selected tools can additionally attach additive `structuredContent` for deterministic discovery or stable failure categories (`list_projects` is the primary discovery example)
-- **JSON tools**: `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects` - return JSON with `structuredContent`
+- **JSON tools**: `get_server_build_info`, `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects` - return JSON with `structuredContent`
 - **Text tools**: `get_edt_version` - return plain text
 
 </details>

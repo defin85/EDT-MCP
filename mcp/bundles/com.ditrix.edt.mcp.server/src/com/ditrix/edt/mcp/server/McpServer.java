@@ -58,6 +58,7 @@ import com.ditrix.edt.mcp.server.tools.impl.GetMetadataObjectsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetPlatformDocumentationTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetProblemSummaryTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetProjectErrorsTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetServerBuildInfoTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetTagsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetObjectsByTagsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetTasksTool;
@@ -242,6 +243,7 @@ public class McpServer
         
         // Register built-in tools
         registry.register(new GetEdtVersionTool());
+        registry.register(new GetServerBuildInfoTool());
         registry.register(new ListProjectsTool());
         registry.register(new GetConfigurationPropertiesTool());
         registry.register(new GetExtensionPropertiesTool());

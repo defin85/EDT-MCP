@@ -29,6 +29,7 @@ import com.ditrix.edt.mcp.server.tools.impl.CleanProjectTool;
 import com.ditrix.edt.mcp.server.tools.impl.DebugLaunchTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetProblemSummaryTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetProjectErrorsTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetServerBuildInfoTool;
 import com.ditrix.edt.mcp.server.tools.impl.RevalidateObjectsTool;
 import com.ditrix.edt.mcp.server.tools.impl.UpdateDatabaseTool;
 import com.ditrix.edt.mcp.server.protocol.jsonrpc.ToolCallResult;
@@ -204,6 +205,7 @@ public class McpProtocolHandlerTest
     @Test
     public void testToolsListReportsRealToolTaskPolicies()
     {
+        registry.register(new GetServerBuildInfoTool());
         registry.register(new UpdateDatabaseTool());
         registry.register(new CleanProjectTool());
         registry.register(new RevalidateObjectsTool());
@@ -224,6 +226,7 @@ public class McpProtocolHandlerTest
                 tool.getAsJsonObject("execution").get("taskSupport").getAsString());
         }
 
+        assertEquals("forbidden", taskPolicies.get(GetServerBuildInfoTool.NAME));
         assertEquals("optional", taskPolicies.get(UpdateDatabaseTool.NAME));
         assertEquals("optional", taskPolicies.get(CleanProjectTool.NAME));
         assertEquals("optional", taskPolicies.get(RevalidateObjectsTool.NAME));

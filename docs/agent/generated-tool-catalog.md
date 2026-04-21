@@ -3,8 +3,8 @@
 
 Этот файл генерируется из `tools/impl/*Tool.java` и служит fast reference для Codex.
 
-- Tool implementations found: `43`
-- Tool names documented in `README.md`: `43`
+- Tool implementations found: `44`
+- Tool names documented in `README.md`: `44`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
 ## Tool Map
@@ -37,6 +37,7 @@
 | `get_platform_documentation` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetPlatformDocumentationTool.java` | `-` | `read/discovery` | - |
 | `get_problem_summary` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetProblemSummaryTool.java` | `-` | `read/discovery` | - |
 | `get_project_errors` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetProjectErrorsTool.java` | `-` | `read/discovery` | - |
+| `get_server_build_info` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetServerBuildInfoTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetServerBuildInfoToolTest.java` | `read/discovery` | - |
 | `get_symbol_info` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetSymbolInfoTool.java` | `-` | `read/discovery` | - |
 | `get_tags` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTagsTool.java` | `-` | `read/discovery` | - |
 | `get_tasks` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTasksTool.java` | `-` | `read/discovery` | - |
