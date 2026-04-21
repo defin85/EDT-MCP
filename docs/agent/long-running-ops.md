@@ -5,13 +5,15 @@
 ## Scope
 
 - `update_database`
+- `apply_extension_to_infobase`
 - `get_operation_snapshot`
 - `get_active_operation`
 - `clean_project`
 - `revalidate_objects`
 - `debug_launch`
 
-Первая async-default волна: `update_database`, `clean_project`, и full-project `revalidate_objects`.
+Первая async-default волна: `update_database`, `apply_extension_to_infobase`, `clean_project`,
+и full-project `revalidate_objects`.
 `debug_launch` остаётся sync-first в этом rollout-е.
 Тяжёлые read-only diagnostics (`get_problem_summary`, `get_project_errors`, `validate_query`) тоже остаются sync-first:
 для них текущая стратегия — contract shaping через summary/filter/limit, а не task enablement.
@@ -49,6 +51,7 @@
 - `.../progress/ToolExecutionContext.java`
 - `.../tasks/TaskRegistry.java`
 - `.../tools/impl/UpdateDatabaseTool.java`
+- `.../tools/impl/ApplyExtensionToInfobaseTool.java`
 - `.../tools/impl/GetOperationSnapshotTool.java`
 - `.../tools/impl/GetActiveOperationTool.java`
 - `.../tools/impl/CleanProjectTool.java`
@@ -78,11 +81,52 @@
 7. Terminal payload/task result может нести machine-readable continuation hint
 8. `get_active_operation` остаётся compatibility fallback, когда `operationId` ещё неизвестен
 
+## Early Revalidate Hang Diagnostics
+
+Используй этот path, когда object-scoped `revalidate_objects` может повесить EDT до
+`scheduleValidation returned` или до поздних build/derived-data waits.
+
+Ожидаемый checkpoint order для object-scoped `revalidate_objects`:
+
+1. `:: start`
+2. `:: project handle resolved`
+3. `:: project exists`
+4. `:: project is open`
+5. `:: refresh stage start`
+6. `:: reporter.stage(refresh) start`
+7. `:: reporter.stage(refresh) returned ...`
+8. `:: refreshLocal start`
+9. `:: refreshLocal completed ...`
+10. `:: object lookup completed ...`
+11. `:: scheduleValidation start ...`
+12. `:: scheduleValidation returned`
+13. `:: waiting for build jobs`
+14. `:: build jobs completed ...`
+15. `:: waiting for derived data ...`
+16. `:: derived data completed ...`
+
+Diagnostic grep for `.metadata/.log`:
+
+```bash
+rg -n '\[diag\]|watchdog fired|thread dump for|tool=revalidate_objects|requestId=|operationId=|refreshLocal|scheduleValidation|waiting for build jobs|waiting for derived data' <workspace>/.metadata/.log
+```
+
+Interpretation rules:
+
+- only `:: start` with no later checkpoint means the incident is still too early to call a root cause; it narrows the failure to the pre-refresh window, not to a proven EDT deadlock
+- `refresh stage start` without `reporter.stage(refresh) returned` points to the refresh-stage setup path rather than later validation/build waits
+- `refreshLocal start` without `refreshLocal completed` marks the early refresh blind spot; expect `watchdog fired` plus `thread dump for ... stage=refresh` if the watchdog thread still runs
+- `scheduleValidation start` without `scheduleValidation returned` shifts suspicion to the scheduler path rather than build-job joins
+- `waiting for build jobs` or `waiting for derived data` means the call has already escaped the early blind spot and should be investigated as a later-stage wait
+- a single successful rerun does not close the incident when the known reproduce is intermittent; preserve both success and hang traces by `requestId` and `operationId`
+
 ## Evidence And Gaps
 
 - Product/documentation evidence: `README.md`
 - Build/test evidence: `tests/TESTING.md`, `mcp/tests/com.ditrix.edt.mcp.server.tests/`
-- Current evidence gap: detached tracker lifecycle и continuation hint покрыты unit-level contract tests, но live rebuild/update continuation всё ещё требует running EDT server
+- Current evidence gaps:
+- detached tracker lifecycle и continuation hint покрыты unit-level contract tests, но live rebuild/update continuation всё ещё требует running EDT server
+- early object-scoped `revalidate_objects` diagnostics are unit-covered for label/watchdog formatting, but live refresh-path evidence still depends on a real EDT workspace log
 
 ## Verify Strategy
 

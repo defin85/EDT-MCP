@@ -41,6 +41,7 @@ import com.ditrix.edt.mcp.server.tasks.TaskCancellationToken;
 import com.ditrix.edt.mcp.server.tasks.TaskSchedulingKey;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.utils.BuildUtils;
+import com.ditrix.edt.mcp.server.utils.DiagnosticThreadDumpWatchdog;
 import com.ditrix.edt.mcp.server.utils.MetadataTypeUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
 import com.e1c.g5.v8.dt.check.ICheckScheduler;
@@ -203,6 +204,7 @@ public class RevalidateObjectsTool implements IMcpTool
         boolean fullProjectRevalidation = objectFqns == null || objectFqns.isEmpty();
         McpServer server = Activator.getDefault() != null ? Activator.getDefault().getMcpServer() : null;
         ToolExecutionContext context = ToolExecutionContextHolder.get();
+        String diagnosticLabel = buildDiagnosticLabel(context, projectName, fullProjectRevalidation, objectFqns);
         OperationProgressReporter reporter = createProgressReporter(context, projectName, fullProjectRevalidation,
                 objectFqns);
         CapturingProgressMonitor monitor = new CapturingProgressMonitor(reporter);
@@ -214,23 +216,45 @@ public class RevalidateObjectsTool implements IMcpTool
 
         try
         {
+            Activator.logInfo("[diag] " + diagnosticLabel + " :: start"); //$NON-NLS-1$ //$NON-NLS-2$
             IWorkspace workspace = ResourcesPlugin.getWorkspace();
 
             // Find project
+            Activator.logInfo("[diag] " + diagnosticLabel + " :: resolving workspace project handle"); //$NON-NLS-1$ //$NON-NLS-2$
             project = workspace.getRoot().getProject(projectName);
+            Activator.logInfo("[diag] " + diagnosticLabel + " :: project handle resolved"); //$NON-NLS-1$ //$NON-NLS-2$
             if (project == null || !project.exists())
             {
                 return ToolResult.error("Project not found: " + projectName).toJson(); //$NON-NLS-1$
             }
+            Activator.logInfo("[diag] " + diagnosticLabel + " :: project exists"); //$NON-NLS-1$ //$NON-NLS-2$
 
             if (!project.isOpen())
             {
                 return ToolResult.error("Project is closed: " + projectName).toJson(); //$NON-NLS-1$
             }
+            Activator.logInfo("[diag] " + diagnosticLabel + " :: project is open"); //$NON-NLS-1$ //$NON-NLS-2$
 
             // Refresh from disk
-            reporter.stage(STAGE_REFRESH, "Refreshing project from disk"); //$NON-NLS-1$
-            project.refreshLocal(IResource.DEPTH_INFINITE, monitor);
+            long refreshStageStartedAt = System.nanoTime();
+            Activator.logInfo("[diag] " + diagnosticLabel + " :: refresh stage start"); //$NON-NLS-1$ //$NON-NLS-2$
+            try (DiagnosticThreadDumpWatchdog watchdog = DiagnosticThreadDumpWatchdog.start(diagnosticLabel,
+                    STAGE_REFRESH, 30000L))
+            {
+                long refreshReporterStartedAt = System.nanoTime();
+                Activator.logInfo("[diag] " + diagnosticLabel + " :: reporter.stage(refresh) start"); //$NON-NLS-1$ //$NON-NLS-2$
+                reporter.stage(STAGE_REFRESH, "Refreshing project from disk"); //$NON-NLS-1$
+                Activator.logInfo("[diag] " + diagnosticLabel + " :: reporter.stage(refresh) returned in " //$NON-NLS-1$ //$NON-NLS-2$
+                        + elapsedMillis(refreshReporterStartedAt) + "ms"); //$NON-NLS-1$
+
+                long refreshStartedAt = System.nanoTime();
+                Activator.logInfo("[diag] " + diagnosticLabel + " :: refreshLocal start"); //$NON-NLS-1$ //$NON-NLS-2$
+                project.refreshLocal(IResource.DEPTH_INFINITE, monitor);
+                Activator.logInfo("[diag] " + diagnosticLabel + " :: refreshLocal completed in " //$NON-NLS-1$ //$NON-NLS-2$
+                        + elapsedMillis(refreshStartedAt) + "ms"); //$NON-NLS-1$
+            }
+            Activator.logInfo("[diag] " + diagnosticLabel + " :: refresh stage completed in " //$NON-NLS-1$ //$NON-NLS-2$
+                    + elapsedMillis(refreshStageStartedAt) + "ms"); //$NON-NLS-1$
             if (isCancellationRequested(cancellationToken, monitor))
             {
                 return cancelled(reporter);
@@ -240,11 +264,17 @@ public class RevalidateObjectsTool implements IMcpTool
             {
                 reporter.stage(STAGE_FULL_REVALIDATION, "Triggering full project revalidation"); //$NON-NLS-1$
                 Activator.logInfo("Revalidating entire project: " + project.getName()); //$NON-NLS-1$
+                Activator.logInfo("[diag] " + diagnosticLabel + " :: project.build start"); //$NON-NLS-1$ //$NON-NLS-2$
                 project.build(IncrementalProjectBuilder.INCREMENTAL_BUILD, monitor);
+                Activator.logInfo("[diag] " + diagnosticLabel + " :: project.build returned"); //$NON-NLS-1$ //$NON-NLS-2$
                 buildTriggered = true;
 
                 reporter.indeterminate(STAGE_WAITING_FOR_BUILD, "Waiting for build and derived data"); //$NON-NLS-1$
-                BuildUtils.waitForBuildAndDerivedData(project, monitor);
+                try (DiagnosticThreadDumpWatchdog watchdog = DiagnosticThreadDumpWatchdog.start(diagnosticLabel,
+                        STAGE_WAITING_FOR_BUILD, 30000L))
+                {
+                    BuildUtils.waitForBuildAndDerivedData(project, monitor, diagnosticLabel);
+                }
                 if (isCancellationRequested(cancellationToken, monitor))
                 {
                     return cancelled(reporter);
@@ -260,7 +290,8 @@ public class RevalidateObjectsTool implements IMcpTool
                     .toJson();
             }
 
-            return revalidateSpecificObjects(project, objectFqns, monitor, reporter, cancellationToken);
+            return revalidateSpecificObjects(project, objectFqns, monitor, reporter, cancellationToken,
+                    diagnosticLabel);
         }
         catch (Exception e)
         {
@@ -295,7 +326,8 @@ public class RevalidateObjectsTool implements IMcpTool
      * @throws CoreException on error
      */
     private String revalidateSpecificObjects(IProject project, List<String> objectFqns, IProgressMonitor monitor,
-            OperationProgressReporter reporter, TaskCancellationToken cancellationToken) throws CoreException
+            OperationProgressReporter reporter, TaskCancellationToken cancellationToken, String diagnosticLabel)
+            throws CoreException
     {
         String projectName = project.getName();
         reporter.stage(STAGE_OBJECT_LOOKUP, "Resolving requested objects for validation"); //$NON-NLS-1$
@@ -350,6 +382,7 @@ public class RevalidateObjectsTool implements IMcpTool
             normalizedFqns.add(MetadataTypeUtils.normalizeFqn(fqn));
         }
 
+        long lookupStartedAt = System.nanoTime();
         bmModel.executeReadonlyTask(new AbstractBmTask<Void>("RevalidateObjectsLookup") //$NON-NLS-1$
         {
             @Override
@@ -385,6 +418,9 @@ public class RevalidateObjectsTool implements IMcpTool
                 return null;
             }
         });
+        Activator.logInfo("[diag] " + diagnosticLabel + " :: object lookup completed in " //$NON-NLS-1$ //$NON-NLS-2$
+                + elapsedMillis(lookupStartedAt) + "ms; found=" + found.size() + ", notFound=" + notFound.size() //$NON-NLS-1$ //$NON-NLS-2$
+                + ", skipped=" + skippedNullUri.size()); //$NON-NLS-1$
 
         if (isCancellationRequested(cancellationToken, monitor))
         {
@@ -407,12 +443,25 @@ public class RevalidateObjectsTool implements IMcpTool
             {
                 // Use 4-parameter version without IBmTransaction
                 // Use empty set for checkIds = validate with all checks
-                checkScheduler.scheduleValidation(project, Collections.emptySet(), validObjects, monitor);
+                Activator.logInfo("[diag] " + diagnosticLabel + " :: scheduleValidation start for " //$NON-NLS-1$ //$NON-NLS-2$
+                        + validObjects.size() + " bm ids"); //$NON-NLS-1$
+                try (DiagnosticThreadDumpWatchdog watchdog = DiagnosticThreadDumpWatchdog.start(diagnosticLabel,
+                        STAGE_OBJECT_VALIDATION, 30000L))
+                {
+                    checkScheduler.scheduleValidation(project, Collections.emptySet(), validObjects, monitor);
+                    Activator.logInfo("[diag] " + diagnosticLabel + " :: scheduleValidation returned"); //$NON-NLS-1$ //$NON-NLS-2$
+
+                    reporter.indeterminate(STAGE_WAITING_FOR_BUILD, "Waiting for validation results"); //$NON-NLS-1$
+                    BuildUtils.waitForBuildAndDerivedData(project, monitor, diagnosticLabel);
+                }
             }
         }
-
-        reporter.indeterminate(STAGE_WAITING_FOR_BUILD, "Waiting for validation results"); //$NON-NLS-1$
-        BuildUtils.waitForBuildAndDerivedData(project, monitor);
+        else
+        {
+            Activator.logInfo("[diag] " + diagnosticLabel + " :: no matching objects scheduled for validation"); //$NON-NLS-1$ //$NON-NLS-2$
+            reporter.indeterminate(STAGE_WAITING_FOR_BUILD, "Waiting for validation results"); //$NON-NLS-1$
+            BuildUtils.waitForBuildAndDerivedData(project, monitor, diagnosticLabel);
+        }
         if (isCancellationRequested(cancellationToken, monitor))
         {
             return cancelled(reporter);
@@ -493,5 +542,41 @@ public class RevalidateObjectsTool implements IMcpTool
         reporter.stage(STAGE_FAILURE, message);
         reporter.cancelled(message);
         return ToolResult.error(message).toJson();
+    }
+
+    String buildDiagnosticLabel(ToolExecutionContext context, String projectName, boolean fullProjectRevalidation,
+            List<String> objectFqns)
+    {
+        String operationId = context != null ? context.getOperationId() : null;
+        String requestId = context != null ? context.getRequestId() : null;
+        String objectSummary = fullProjectRevalidation ? "full" : summarizeObjects(objectFqns); //$NON-NLS-1$
+        return "tool=" + NAME + ", project=" + projectName + ", requestId=" + safe(requestId) + ", operationId=" //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+                + safe(operationId) + ", objects=" + objectSummary + ", thread=" //$NON-NLS-1$ //$NON-NLS-2$
+                + Thread.currentThread().getName();
+    }
+
+    private String summarizeObjects(List<String> objectFqns)
+    {
+        if (objectFqns == null || objectFqns.isEmpty())
+        {
+            return "[]"; //$NON-NLS-1$
+        }
+        int limit = Math.min(objectFqns.size(), 3);
+        List<String> sample = objectFqns.subList(0, limit);
+        if (objectFqns.size() <= limit)
+        {
+            return sample.toString();
+        }
+        return sample + " +" + (objectFqns.size() - limit); //$NON-NLS-1$
+    }
+
+    private String safe(String value)
+    {
+        return value != null && !value.isBlank() ? value : "<none>"; //$NON-NLS-1$
+    }
+
+    private long elapsedMillis(long startedAt)
+    {
+        return (System.nanoTime() - startedAt) / 1_000_000L;
     }
 }
