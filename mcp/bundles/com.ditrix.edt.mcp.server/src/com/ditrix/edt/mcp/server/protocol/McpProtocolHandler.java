@@ -238,6 +238,7 @@ public class McpProtocolHandler
 
         String toolName = tool.getName();
         if ("update_database".equals(toolName) || "clean_project".equals(toolName) //$NON-NLS-1$ //$NON-NLS-2$
+                || "run_unit_tests".equals(toolName) //$NON-NLS-1$
                 || "apply_extension_to_infobase".equals(toolName)) //$NON-NLS-1$
         {
             return true;

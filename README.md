@@ -14,9 +14,10 @@ MCP (Model Context Protocol) server plugin for 1C:EDT, enabling AI assistants (C
 - 🔖 **Bookmarks & Tasks** - Access bookmarks and TODO/FIXME markers
 - 💡 **Content Assist** - Get type info, method hints and platform documentation at any code position
 - 🧪 **Query Validation** - Validate 1C query text in project context (syntax + semantic errors, optional DCS mode)
+- 🧪 **Unit Test Execution** - Run retained `YAxUnit` unit-test flows through EDT runtime and retrieve reports by stable `runId`
 - 🧩 **BSL Code Analysis** - Browse modules, inspect structure, read/write methods, search code, and analyze call hierarchy
 - 🖼️ **Form Screenshot Capture** - Get PNG screenshots from the form WYSIWYG editor for visual inspection
-- 🚀 **Application Management** - Get applications, update database, launch in debug mode
+- 🚀 **Application Management** - Get applications, update database, run unit tests, and launch in debug mode
 - 🎯 **Status Bar** - Real-time server status with stage-aware progress, elapsed time, and interactive controls
 - ⚡ **Interruptible Operations** - Cancel long-running operations and send signals to AI agent
 - 📡 **Progress Reporting** - `update_database` and `apply_extension_to_infobase` can publish MCP `notifications/progress`, with `get_operation_snapshot` for exact polling and `get_active_operation` as focused fallback
@@ -154,7 +155,7 @@ Note: The EDT operation may still be running in background.
 
 ### Progress Reporting For Long Operations
 
-`update_database`, `apply_extension_to_infobase`, `clean_project`, and full-project
+`update_database`, `apply_extension_to_infobase`, `run_unit_tests`, `clean_project`, and full-project
 `revalidate_objects` publish the same runtime
 progress model to both EDT UI and MCP clients.
 
@@ -162,7 +163,7 @@ progress model to both EDT UI and MCP clients.
 - MCP `notifications/progress` are sent only when the client provided `_meta.progressToken` in the original `tools/call` request and has an SSE stream attached to the same `MCP-Session-Id`.
 - When EDT work survives the original task/call lifetime, `get_operation_snapshot` can return the detached snapshot for the stable `operationId`, while `get_active_operation` remains the focused fallback projection with `detached: true` and structured `details`.
 - Detached continuation relies on `get_operation_snapshot` plus the EDT status bar; the original `progressToken` is not kept alive after the MCP task/call becomes terminal.
-- For `update_database`, `apply_extension_to_infobase`, `clean_project`, and full-project `revalidate_objects`, a bare call now returns task creation metadata; the final payload is retrieved later through `tasks/result` in the same MCP session.
+- For `update_database`, `apply_extension_to_infobase`, `run_unit_tests`, `clean_project`, and full-project `revalidate_objects`, a bare call now returns task creation metadata; the final payload is retrieved later through `tasks/result` in the same MCP session.
 - Sync-only tools still return the normal final tool result directly when clients ignore progress notifications.
 - `get_active_operation` can still be used as a polling fallback when a client does not support or does not consume `notifications/progress`.
 - Busy project/application rejections now include `_meta["io.ditrix.edt.mcp/blocking-operation"]` with stable reason codes, scope identifiers, and exact `operationId` hints when correlation is unambiguous.
@@ -207,11 +208,11 @@ The server now exposes experimental MCP Tasks support for long-running tool exec
 
 - `initialize` advertises `capabilities.tasks.list`, `capabilities.tasks.cancel`, and `capabilities.tasks.requests.tools.call`
 - `tools/list` exposes `execution.taskSupport` for every tool
-- `update_database`, `apply_extension_to_infobase`, and `clean_project` keep `execution.taskSupport: "optional"` and are async-first at runtime: bare calls auto-promote into task-backed execution
+- `update_database`, `apply_extension_to_infobase`, `run_unit_tests`, and `clean_project` keep `execution.taskSupport: "optional"` and are async-first at runtime: bare calls auto-promote into task-backed execution
 - `revalidate_objects` keeps `execution.taskSupport: "optional"` and is async-first only for full-project revalidation; partial object revalidation stays synchronous and task-augmented partial requests are rejected with an actionable error
 - `tasks/get`, `tasks/list`, `tasks/result`, and `tasks/cancel` are available over the same `/mcp` endpoint
 - Follow-up `tasks/get`, `tasks/result`, and `tasks/cancel` calls must use the same `MCP-Session-Id` that created the task
-- The original `_meta.progressToken` stays valid for task-backed `update_database`, `apply_extension_to_infobase`, `clean_project`, and full-project `revalidate_objects` calls while the task is live; after a terminal MCP outcome, detached continuation moves to `get_operation_snapshot` for exact polling by `operationId`
+- The original `_meta.progressToken` stays valid for task-backed `update_database`, `apply_extension_to_infobase`, `run_unit_tests`, `clean_project`, and full-project `revalidate_objects` calls while the task is live; after a terminal MCP outcome, detached continuation moves to `get_operation_snapshot` for exact polling by `operationId`
 - When cancellation can leave EDT work running in background, terminal sync/task payloads include `_meta["io.ditrix.edt.mcp/detached-continuation"]` with the stable `operationId` and `pollTool: "get_operation_snapshot"`
 - Busy project/application rejections may include `_meta["io.ditrix.edt.mcp/blocking-operation"]` with `reasonCode`, `scope`, `projectName`, known application identifiers, and exact polling hints when the blocker maps to a single tracked operation
 - Conflicting mutable task-backed operations are rejected explicitly instead of running in unsafe parallel
@@ -374,6 +375,8 @@ Add to `claude_desktop_config.json`:
 | `probe_extension_xml_contract` | Developer-oriented probe: compare the workspace `src` tree with EDT XML export layout for a selected extension target |
 | `get_applications` | Get list of applications (infobases) for a project with update state; configuration-only in this rollout |
 | `update_database` | Update database (infobase) with full or incremental update mode; async-first at runtime, explicit task augmentation, and configuration-only extension rejection |
+| `run_unit_tests` | Run `YAxUnit`-backed unit tests for a configuration project/application target; async-first at runtime with retained `runId` results |
+| `get_test_run_report` | Read retained summary, manifest, or JUnit payload for a completed unit-test run by stable `runId` |
 | `get_operation_snapshot` | Get the progress snapshot for a specific tracked long-running operation by `operationId` |
 | `get_active_operation` | Get the current long-running operation progress snapshot for polling fallback |
 | `debug_launch` | Launch application in debug mode (auto-updates database before launch); configuration-only in this rollout |
@@ -828,6 +831,57 @@ Typical stages:
 - `final_state_check`
 - `completion` / `failure`
 
+#### Run Unit Tests Tool
+
+**`run_unit_tests`** - Run `YAxUnit`-backed unit tests for a configuration project and runtime application target.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | EDT configuration project name |
+| `applicationId` | Yes | Application ID from `get_applications` |
+| `provider` | No | Supported provider (`yaxunit` only in this rollout) |
+| `scope` | No | `all`, `module`, `suite`, or `test` |
+| `testExtension` | No | YAxUnit test extension/filter root (default: `tests`) |
+| `testModule` | No | Required for `scope=module` |
+| `testPath` | No | Required for `scope=test` |
+| `suiteName` | No | Required for `scope=suite` |
+| `tagsInclude` | No | Optional YAxUnit tags filter |
+| `updateBeforeRun` | No | If true, perform incremental infobase update before launch |
+| `timeoutSeconds` | No | Bounded EDT runtime wait before the tool fails closed |
+
+**Contract notes:**
+- Only configuration-project targets are supported in the first rollout
+- Bare calls auto-promote into task-backed execution
+- The final task result returns a stable `runId`, machine-readable status, summary counts, and retained report formats
+- `tagsExclude`, BDD/scenario flows, extension-project targets, and debug-mode execution stay fail-closed in this rollout
+- If the EDT runtime bridge or YAxUnit engine is unavailable, the tool returns an actionable failure instead of launching partially
+
+Typical stages:
+- `validation`
+- `preflight`
+- `optional_update`
+- `prepare_provider`
+- `launch`
+- `parse_report`
+- `completion` / `failure`
+
+#### Get Test Run Report Tool
+
+**`get_test_run_report`** - Return a retained unit-test summary, report manifest, or JUnit XML payload by `runId`.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `runId` | Yes | Stable run identifier from `run_unit_tests` |
+| `format` | No | `summary`, `manifest`, or `junit` (default: `summary`) |
+
+**Returns:**
+- `found=false` for unknown or expired `runId`
+- summary counts and status for `format=summary`
+- report availability/retention metadata for `format=manifest`
+- retained raw JUnit XML for `format=junit`
+
 **`get_operation_snapshot`** - Return a JSON snapshot for a specific tracked long-running EDT operation by stable `operationId`. Useful after detached-continuation or blocking-operation hints already provided the exact operation identity.
 
 **Parameters:**
@@ -1047,7 +1101,7 @@ Typical stages:
 ### Output Formats
 
 - **Markdown tools**: return Markdown as EmbeddedResource with `mimeType: text/markdown`; selected tools can additionally attach additive `structuredContent` for deterministic discovery or stable failure categories (`list_projects` is the primary discovery example)
-- **JSON tools**: `get_server_build_info`, `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects` - return JSON with `structuredContent`
+- **JSON tools**: `get_server_build_info`, `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects`, `run_unit_tests`, `get_test_run_report` - return JSON with `structuredContent`
 - **Text tools**: `get_edt_version` - return plain text
 
 </details>

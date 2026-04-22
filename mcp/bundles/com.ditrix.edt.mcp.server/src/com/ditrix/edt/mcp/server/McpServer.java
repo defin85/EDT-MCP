@@ -37,6 +37,7 @@ import com.ditrix.edt.mcp.server.progress.ProgressEvent;
 import com.ditrix.edt.mcp.server.progress.SseSessionRegistry;
 import com.ditrix.edt.mcp.server.progress.ToolExecutionContext;
 import com.ditrix.edt.mcp.server.tasks.TaskRegistry;
+import com.ditrix.edt.mcp.server.testruns.UnitTestRunStore;
 import com.ditrix.edt.mcp.server.tools.McpToolRegistry;
 import com.ditrix.edt.mcp.server.tools.impl.GetBookmarksTool;
 import com.ditrix.edt.mcp.server.tools.impl.DebugLaunchTool;
@@ -60,6 +61,7 @@ import com.ditrix.edt.mcp.server.tools.impl.GetProblemSummaryTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetProjectErrorsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetServerBuildInfoTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetTagsTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetTestRunReportTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetObjectsByTagsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetTasksTool;
 import com.ditrix.edt.mcp.server.tools.impl.ListProjectsTool;
@@ -70,6 +72,7 @@ import com.ditrix.edt.mcp.server.tools.impl.CleanProjectTool;
 import com.ditrix.edt.mcp.server.tools.impl.RevalidateObjectsTool;
 import com.ditrix.edt.mcp.server.tools.impl.UpdateDatabaseTool;
 import com.ditrix.edt.mcp.server.tools.impl.ReadModuleSourceTool;
+import com.ditrix.edt.mcp.server.tools.impl.RunUnitTestsTool;
 import com.ditrix.edt.mcp.server.tools.impl.WriteModuleSourceTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetModuleStructureTool;
 import com.ditrix.edt.mcp.server.tools.impl.ListModulesTool;
@@ -151,6 +154,9 @@ public class McpServer
 
     /** Registry of task-backed work */
     private final TaskRegistry taskRegistry = new TaskRegistry();
+
+    /** Retained summaries/reports for completed unit-test runs */
+    private final UnitTestRunStore unitTestRunStore = new UnitTestRunStore();
 
     /**
      * Starts the MCP server on the specified port.
@@ -273,6 +279,8 @@ public class McpServer
         registry.register(new ProbeExtensionSyncBridgeTool());
         registry.register(new GetApplicationsTool());
         registry.register(new UpdateDatabaseTool());
+        registry.register(new RunUnitTestsTool());
+        registry.register(new GetTestRunReportTool());
         registry.register(new GetOperationSnapshotTool());
         registry.register(new GetActiveOperationTool());
         registry.register(new DebugLaunchTool());
@@ -329,6 +337,8 @@ public class McpServer
             activeOperationHandles.clear();
             focusedOperationId = null;
             taskRegistry.clear();
+            unitTestRunStore.clear();
+            progressNotificationSender.clear();
             sseSessionRegistry.clear();
             Activator.logInfo("MCP Server stopped"); //$NON-NLS-1$
         }
@@ -704,6 +714,11 @@ public class McpServer
     public TaskRegistry getTaskRegistry()
     {
         return taskRegistry;
+    }
+
+    public UnitTestRunStore getUnitTestRunStore()
+    {
+        return unitTestRunStore;
     }
 
     public Future<?> submitTask(Runnable runnable)

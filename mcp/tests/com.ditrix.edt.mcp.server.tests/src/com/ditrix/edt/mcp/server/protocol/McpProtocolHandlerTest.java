@@ -30,7 +30,9 @@ import com.ditrix.edt.mcp.server.tools.impl.DebugLaunchTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetProblemSummaryTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetProjectErrorsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetServerBuildInfoTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetTestRunReportTool;
 import com.ditrix.edt.mcp.server.tools.impl.RevalidateObjectsTool;
+import com.ditrix.edt.mcp.server.tools.impl.RunUnitTestsTool;
 import com.ditrix.edt.mcp.server.tools.impl.UpdateDatabaseTool;
 import com.ditrix.edt.mcp.server.protocol.jsonrpc.ToolCallResult;
 import com.google.gson.JsonElement;
@@ -210,6 +212,8 @@ public class McpProtocolHandlerTest
         registry.register(new CleanProjectTool());
         registry.register(new RevalidateObjectsTool());
         registry.register(new DebugLaunchTool());
+        registry.register(new RunUnitTestsTool());
+        registry.register(new GetTestRunReportTool());
         registry.register(new GetProblemSummaryTool());
         registry.register(new GetProjectErrorsTool());
 
@@ -230,6 +234,8 @@ public class McpProtocolHandlerTest
         assertEquals("optional", taskPolicies.get(UpdateDatabaseTool.NAME));
         assertEquals("optional", taskPolicies.get(CleanProjectTool.NAME));
         assertEquals("optional", taskPolicies.get(RevalidateObjectsTool.NAME));
+        assertEquals("optional", taskPolicies.get(RunUnitTestsTool.NAME));
+        assertEquals("forbidden", taskPolicies.get(GetTestRunReportTool.NAME));
         assertEquals("forbidden", taskPolicies.get(DebugLaunchTool.NAME));
         assertEquals("forbidden", taskPolicies.get(GetProblemSummaryTool.NAME));
         assertEquals("forbidden", taskPolicies.get(GetProjectErrorsTool.NAME));
@@ -410,6 +416,23 @@ public class McpProtocolHandlerTest
 
         String request = buildToolCallRequest(1, ApplyExtensionToInfobaseTool.NAME,
                 "{\"projectName\":\"EXT_001\",\"applicationId\":\"app-1\"}"); //$NON-NLS-1$ //$NON-NLS-2$
+        String response = handler.processRequest(request, "session-1", false, "json"); //$NON-NLS-1$ //$NON-NLS-2$
+
+        JsonObject json = parseResponse(response);
+        JsonObject result = json.getAsJsonObject("result"); //$NON-NLS-1$
+        assertNotNull(result);
+        assertTrue(result.has("task")); //$NON-NLS-1$
+    }
+
+    @Test
+    public void testToolCallAutoPromotesBareRunUnitTestsRequestIntoTask() throws Exception
+    {
+        registry.register(new StubTool(RunUnitTestsTool.NAME, "Async-first", "{\"type\":\"object\"}", //$NON-NLS-1$ //$NON-NLS-2$
+                TaskSupport.OPTIONAL));
+        installTestActivator(createTaskCapableServer());
+
+        String request = buildToolCallRequest(1, RunUnitTestsTool.NAME,
+                "{\"projectName\":\"TestConfiguration\",\"applicationId\":\"app-1\"}"); //$NON-NLS-1$ //$NON-NLS-2$
         String response = handler.processRequest(request, "session-1", false, "json"); //$NON-NLS-1$ //$NON-NLS-2$
 
         JsonObject json = parseResponse(response);

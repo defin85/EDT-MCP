@@ -8,6 +8,12 @@ package com.ditrix.edt.mcp.server.progress;
 
 import static org.junit.Assert.*;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 import java.util.Map;
 
 import org.junit.Test;
@@ -60,5 +66,54 @@ public class OperationProgressReporterTest
         assertEquals("SYNCHRONIZING", snapshot.getDetails().get("synchronizationState")); //$NON-NLS-1$ //$NON-NLS-2$
         assertNull(snapshot.getProgressToken());
         assertEquals(OperationProgressState.STATUS_RUNNING, snapshot.getStatus());
+    }
+
+    @Test
+    public void testSnapshotDoesNotWaitForBlockingListener() throws Exception
+    {
+        OperationProgressReporter reporter = new OperationProgressReporter();
+        reporter.start("op-3", "revalidate_objects", "prepare", "Preparing refresh", "req-3", "session-3", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$ //$NON-NLS-6$
+                "progress-3"); //$NON-NLS-1$
+
+        CountDownLatch listenerEntered = new CountDownLatch(1);
+        CountDownLatch releaseListener = new CountDownLatch(1);
+        reporter.setStateListener(state -> {
+            listenerEntered.countDown();
+            awaitLatch(releaseListener, "listener release"); //$NON-NLS-1$
+        });
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try
+        {
+            Future<OperationProgressState> updateFuture = executor.submit(
+                    () -> reporter.stage("refresh", "Refreshing project from disk")); //$NON-NLS-1$ //$NON-NLS-2$
+            assertTrue(listenerEntered.await(2, TimeUnit.SECONDS));
+
+            Future<OperationProgressState> snapshotFuture = executor.submit(reporter::snapshot);
+            OperationProgressState snapshot = snapshotFuture.get(500, TimeUnit.MILLISECONDS);
+            assertNotNull(snapshot);
+            assertEquals("refresh", snapshot.getStage()); //$NON-NLS-1$
+
+            releaseListener.countDown();
+            assertNotNull(updateFuture.get(2, TimeUnit.SECONDS));
+        }
+        finally
+        {
+            releaseListener.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private static void awaitLatch(CountDownLatch latch, String name)
+    {
+        try
+        {
+            assertTrue("Timed out waiting for " + name, latch.await(5, TimeUnit.SECONDS)); //$NON-NLS-1$
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+            fail("Interrupted while waiting for " + name); //$NON-NLS-1$
+        }
     }
 }

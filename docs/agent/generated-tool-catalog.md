@@ -3,8 +3,8 @@
 
 Этот файл генерируется из `tools/impl/*Tool.java` и служит fast reference для Codex.
 
-- Tool implementations found: `44`
-- Tool names documented in `README.md`: `44`
+- Tool implementations found: `46`
+- Tool names documented in `README.md`: `46`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
 ## Tool Map
@@ -41,6 +41,7 @@
 | `get_symbol_info` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetSymbolInfoTool.java` | `-` | `read/discovery` | - |
 | `get_tags` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTagsTool.java` | `-` | `read/discovery` | - |
 | `get_tasks` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTasksTool.java` | `-` | `read/discovery` | - |
+| `get_test_run_report` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTestRunReportTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetTestRunReportToolTest.java` | `read/discovery` | - |
 | `go_to_definition` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GoToDefinitionTool.java` | `-` | `analysis/navigation` | - |
 | `list_infobase_extensions` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListInfobaseExtensionsTool.java` | `-` | `read/discovery` | - |
 | `list_modules` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListModulesTool.java` | `-` | `read/discovery` | - |
@@ -51,6 +52,7 @@
 | `read_module_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ReadModuleSourceTool.java` | `-` | `mixed` | - |
 | `rename_metadata_object` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RenameMetadataObjectTool.java` | `-` | `mutation/refactoring` | - |
 | `revalidate_objects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RevalidateObjectsTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
+| `run_unit_tests` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RunUnitTestsTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/RunUnitTestsToolTest.java` | `mixed` | - |
 | `search_in_code` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/SearchInCodeTool.java` | `-` | `mixed` | - |
 | `update_database` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/UpdateDatabaseTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `validate_query` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ValidateQueryTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/ValidateQueryToolTest.java` | `analysis/navigation` | - |

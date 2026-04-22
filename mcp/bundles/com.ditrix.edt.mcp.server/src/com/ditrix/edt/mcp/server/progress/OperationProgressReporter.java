@@ -53,109 +53,149 @@ public class OperationProgressReporter
         this.recentEventLimit = recentEventLimit > 0 ? recentEventLimit : DEFAULT_RECENT_EVENT_LIMIT;
     }
 
-    public synchronized OperationProgressState start(String operationId, String toolName, String stage, String message,
+    public OperationProgressState start(String operationId, String toolName, String stage, String message,
             String requestId, String sessionId, Object progressToken)
     {
         return start(operationId, toolName, stage, message, requestId, sessionId, progressToken, Map.of());
     }
 
-    public synchronized OperationProgressState start(String operationId, String toolName, String stage, String message,
+    public OperationProgressState start(String operationId, String toolName, String stage, String message,
             String requestId, String sessionId, Object progressToken, Map<String, Object> details)
     {
-        recentEvents.clear();
-        this.operationId = hasText(operationId) ? operationId : UUID.randomUUID().toString();
-        this.toolName = toolName;
-        this.stage = stage;
-        this.message = message;
-        this.progress = null;
-        this.total = null;
-        this.indeterminate = true;
-        this.status = OperationProgressState.STATUS_RUNNING;
-        this.startedAt = Instant.now();
-        this.lastUpdateAt = startedAt;
-        this.requestId = requestId;
-        this.sessionId = sessionId;
-        this.progressToken = progressToken;
-        this.detached = false;
-        this.details = sanitizeDetails(details);
-        addEvent(lastUpdateAt, stage, message, null, null);
-        return publishSnapshot(snapshot());
-    }
-
-    public synchronized OperationProgressState stage(String stage, String message)
-    {
-        this.stage = stage;
-        this.message = message;
-        this.status = OperationProgressState.STATUS_RUNNING;
-        this.lastUpdateAt = Instant.now();
-        addEvent(lastUpdateAt, stage, message, progress, total);
-        return publishSnapshot(snapshot());
-    }
-
-    public synchronized OperationProgressState progress(double progress, Double total, String message)
-    {
-        if (!hasText(stage) && hasText(message))
+        SnapshotPublication publication;
+        synchronized (this)
         {
-            this.stage = message;
+            recentEvents.clear();
+            this.operationId = hasText(operationId) ? operationId : UUID.randomUUID().toString();
+            this.toolName = toolName;
+            this.stage = stage;
+            this.message = message;
+            this.progress = null;
+            this.total = null;
+            this.indeterminate = true;
+            this.status = OperationProgressState.STATUS_RUNNING;
+            this.startedAt = Instant.now();
+            this.lastUpdateAt = startedAt;
+            this.requestId = requestId;
+            this.sessionId = sessionId;
+            this.progressToken = progressToken;
+            this.detached = false;
+            this.details = sanitizeDetails(details);
+            addEvent(lastUpdateAt, stage, message, null, null);
+            publication = capturePublication();
         }
-        this.progress = Double.valueOf(progress);
-        this.total = isKnownTotal(total) ? total : null;
-        this.indeterminate = !isKnownTotal(total);
-        this.message = message;
-        this.status = OperationProgressState.STATUS_RUNNING;
-        this.lastUpdateAt = Instant.now();
-        addEvent(lastUpdateAt, stage, message, this.progress, this.total);
-        return publishSnapshot(snapshot());
+        return publishSnapshot(publication);
     }
 
-    public synchronized OperationProgressState indeterminate(String stage, String message)
+    public OperationProgressState stage(String stage, String message)
     {
-        this.stage = stage;
-        this.message = message;
-        this.total = null;
-        this.indeterminate = true;
-        this.status = OperationProgressState.STATUS_RUNNING;
-        this.lastUpdateAt = Instant.now();
-        addEvent(lastUpdateAt, stage, message, progress, null);
-        return publishSnapshot(snapshot());
+        SnapshotPublication publication;
+        synchronized (this)
+        {
+            this.stage = stage;
+            this.message = message;
+            this.status = OperationProgressState.STATUS_RUNNING;
+            this.lastUpdateAt = Instant.now();
+            addEvent(lastUpdateAt, stage, message, progress, total);
+            publication = capturePublication();
+        }
+        return publishSnapshot(publication);
     }
 
-    public synchronized OperationProgressState completed(String message)
+    public OperationProgressState progress(double progress, Double total, String message)
     {
-        this.message = message;
-        this.status = OperationProgressState.STATUS_COMPLETED;
-        this.lastUpdateAt = Instant.now();
-        addEvent(lastUpdateAt, stage, message, progress, total);
-        return publishSnapshot(snapshot());
+        SnapshotPublication publication;
+        synchronized (this)
+        {
+            if (!hasText(stage) && hasText(message))
+            {
+                this.stage = message;
+            }
+            this.progress = Double.valueOf(progress);
+            this.total = isKnownTotal(total) ? total : null;
+            this.indeterminate = !isKnownTotal(total);
+            this.message = message;
+            this.status = OperationProgressState.STATUS_RUNNING;
+            this.lastUpdateAt = Instant.now();
+            addEvent(lastUpdateAt, stage, message, this.progress, this.total);
+            publication = capturePublication();
+        }
+        return publishSnapshot(publication);
     }
 
-    public synchronized OperationProgressState failed(String message, Throwable error)
+    public OperationProgressState indeterminate(String stage, String message)
     {
-        this.message = hasText(message) ? message : errorMessage(error);
-        this.status = OperationProgressState.STATUS_FAILED;
-        this.lastUpdateAt = Instant.now();
-        addEvent(lastUpdateAt, stage, this.message, progress, total);
-        return publishSnapshot(snapshot());
+        SnapshotPublication publication;
+        synchronized (this)
+        {
+            this.stage = stage;
+            this.message = message;
+            this.total = null;
+            this.indeterminate = true;
+            this.status = OperationProgressState.STATUS_RUNNING;
+            this.lastUpdateAt = Instant.now();
+            addEvent(lastUpdateAt, stage, message, progress, null);
+            publication = capturePublication();
+        }
+        return publishSnapshot(publication);
     }
 
-    public synchronized OperationProgressState cancelled(String message)
+    public OperationProgressState completed(String message)
     {
-        this.message = hasText(message) ? message : "Operation cancelled"; //$NON-NLS-1$
-        this.status = OperationProgressState.STATUS_CANCELLED;
-        this.lastUpdateAt = Instant.now();
-        addEvent(lastUpdateAt, stage, this.message, progress, total);
-        return publishSnapshot(snapshot());
+        SnapshotPublication publication;
+        synchronized (this)
+        {
+            this.message = message;
+            this.status = OperationProgressState.STATUS_COMPLETED;
+            this.lastUpdateAt = Instant.now();
+            addEvent(lastUpdateAt, stage, message, progress, total);
+            publication = capturePublication();
+        }
+        return publishSnapshot(publication);
     }
 
-    public synchronized void appendEvent(ProgressEvent event)
+    public OperationProgressState failed(String message, Throwable error)
+    {
+        SnapshotPublication publication;
+        synchronized (this)
+        {
+            this.message = hasText(message) ? message : errorMessage(error);
+            this.status = OperationProgressState.STATUS_FAILED;
+            this.lastUpdateAt = Instant.now();
+            addEvent(lastUpdateAt, stage, this.message, progress, total);
+            publication = capturePublication();
+        }
+        return publishSnapshot(publication);
+    }
+
+    public OperationProgressState cancelled(String message)
+    {
+        SnapshotPublication publication;
+        synchronized (this)
+        {
+            this.message = hasText(message) ? message : "Operation cancelled"; //$NON-NLS-1$
+            this.status = OperationProgressState.STATUS_CANCELLED;
+            this.lastUpdateAt = Instant.now();
+            addEvent(lastUpdateAt, stage, this.message, progress, total);
+            publication = capturePublication();
+        }
+        return publishSnapshot(publication);
+    }
+
+    public void appendEvent(ProgressEvent event)
     {
         if (event == null)
         {
             return;
         }
-        lastUpdateAt = event.getTimestamp() != null ? event.getTimestamp() : Instant.now();
-        addEvent(lastUpdateAt, event.getStage(), event.getMessage(), event.getProgress(), event.getTotal());
-        publishSnapshot(snapshot());
+        SnapshotPublication publication;
+        synchronized (this)
+        {
+            lastUpdateAt = event.getTimestamp() != null ? event.getTimestamp() : Instant.now();
+            addEvent(lastUpdateAt, event.getStage(), event.getMessage(), event.getProgress(), event.getTotal());
+            publication = capturePublication();
+        }
+        publishSnapshot(publication);
     }
 
     public synchronized OperationProgressReporter detachedCopy(String stage, String message, Map<String, Object> details)
@@ -181,27 +221,37 @@ public class OperationProgressReporter
         return copy;
     }
 
-    public synchronized OperationProgressState detachedUpdate(String stage, String message, Map<String, Object> details)
+    public OperationProgressState detachedUpdate(String stage, String message, Map<String, Object> details)
     {
-        this.stage = stage;
-        this.message = message;
-        this.progress = null;
-        this.total = null;
-        this.indeterminate = true;
-        this.status = OperationProgressState.STATUS_RUNNING;
-        this.progressToken = null;
-        this.detached = true;
-        this.details = sanitizeDetails(details);
-        this.lastUpdateAt = Instant.now();
-        addEvent(lastUpdateAt, stage, message, null, null);
-        return publishSnapshot(snapshot());
+        SnapshotPublication publication;
+        synchronized (this)
+        {
+            this.stage = stage;
+            this.message = message;
+            this.progress = null;
+            this.total = null;
+            this.indeterminate = true;
+            this.status = OperationProgressState.STATUS_RUNNING;
+            this.progressToken = null;
+            this.detached = true;
+            this.details = sanitizeDetails(details);
+            this.lastUpdateAt = Instant.now();
+            addEvent(lastUpdateAt, stage, message, null, null);
+            publication = capturePublication();
+        }
+        return publishSnapshot(publication);
     }
 
-    public synchronized OperationProgressState updateDetails(Map<String, Object> details)
+    public OperationProgressState updateDetails(Map<String, Object> details)
     {
-        this.details = sanitizeDetails(details);
-        this.lastUpdateAt = Instant.now();
-        return publishSnapshot(snapshot());
+        SnapshotPublication publication;
+        synchronized (this)
+        {
+            this.details = sanitizeDetails(details);
+            this.lastUpdateAt = Instant.now();
+            publication = capturePublication();
+        }
+        return publishSnapshot(publication);
     }
 
     public void setStateListener(Consumer<OperationProgressState> stateListener)
@@ -231,6 +281,21 @@ public class OperationProgressReporter
 
     public synchronized OperationProgressState snapshot()
     {
+        return buildSnapshot();
+    }
+
+    public synchronized List<ProgressEvent> recentEvents()
+    {
+        return List.copyOf(new ArrayList<>(recentEvents));
+    }
+
+    private SnapshotPublication capturePublication()
+    {
+        return new SnapshotPublication(buildSnapshot(), stateListener);
+    }
+
+    private OperationProgressState buildSnapshot()
+    {
         if (startedAt == null)
         {
             return null;
@@ -241,11 +306,6 @@ public class OperationProgressReporter
                 status, startedAt, lastUpdateAt, elapsedSeconds, requestId, sessionId, progressToken, detached,
                 details,
                 new ArrayList<>(recentEvents));
-    }
-
-    public synchronized List<ProgressEvent> recentEvents()
-    {
-        return List.copyOf(new ArrayList<>(recentEvents));
     }
 
     private void addEvent(Instant timestamp, String stage, String message, Double progress, Double total)
@@ -276,9 +336,14 @@ public class OperationProgressReporter
         return error.getMessage();
     }
 
-    private OperationProgressState publishSnapshot(OperationProgressState snapshot)
+    private OperationProgressState publishSnapshot(SnapshotPublication publication)
     {
-        Consumer<OperationProgressState> listener = stateListener;
+        if (publication == null)
+        {
+            return null;
+        }
+        Consumer<OperationProgressState> listener = publication.listener;
+        OperationProgressState snapshot = publication.snapshot;
         if (listener != null && snapshot != null)
         {
             try
@@ -296,5 +361,17 @@ public class OperationProgressReporter
     private Map<String, Object> sanitizeDetails(Map<String, Object> details)
     {
         return details != null && !details.isEmpty() ? Map.copyOf(details) : Map.of();
+    }
+
+    private static final class SnapshotPublication
+    {
+        private final OperationProgressState snapshot;
+        private final Consumer<OperationProgressState> listener;
+
+        private SnapshotPublication(OperationProgressState snapshot, Consumer<OperationProgressState> listener)
+        {
+            this.snapshot = snapshot;
+            this.listener = listener;
+        }
     }
 }

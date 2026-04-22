@@ -65,6 +65,56 @@ projection mapping now have checked-in unit coverage. Live task lifecycle, owner
 continuation have been manually verified against a real MCP client. Live detached infobase update
 continuation still does not have a dedicated runtime E2E suite.
 
+The first `run_unit_tests` cold-run slice now has checked-in unit coverage for:
+
+- request validation and fail-closed provider/scope boundaries
+- bare-call task auto-promotion through the MCP protocol layer
+- retained `runId` lookup through `get_test_run_report`
+- JUnit XML parsing and report-store expiration
+
+Live YAxUnit execution on a real EDT contour is still a runtime evidence gap. Do not close the
+change on Tycho coverage alone.
+
+### Unit-test execution live verify
+
+Current supported runtime slice:
+
+- `provider=yaxunit` only
+- configuration projects only
+- task-backed `run_unit_tests`
+- retained `get_test_run_report`
+
+Runtime prerequisites for honest live verification:
+
+- running EDT instance with the updated plugin installed
+- target application discoverable through `get_applications`
+- valid EDT infobase access settings for the selected target
+- installed `YAXUNIT` engine extension in the target infobase
+
+Minimal live verification sequence:
+
+```bash
+HOST_IP=$(ip route | awk '/default/ {print $3; exit}')
+curl -sS -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":401,"method":"tools/call","params":{"name":"get_applications","arguments":{"projectName":"<project>"}}}' \
+  "http://$HOST_IP:8765/mcp"
+
+curl -sS -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Session-Id: test-session-1' \
+  -d '{"jsonrpc":"2.0","id":402,"method":"tools/call","params":{"name":"run_unit_tests","arguments":{"projectName":"<project>","applicationId":"<app-id>","provider":"yaxunit","scope":"all"},"_meta":{"progressToken":"unit-run-1"}}}' \
+  "http://$HOST_IP:8765/mcp"
+
+curl -sS -H 'Content-Type: application/json' \
+  -H 'MCP-Session-Id: test-session-1' \
+  -d '{"jsonrpc":"2.0","id":403,"method":"tasks/result","params":{"taskId":"<task-id>"}}' \
+  "http://$HOST_IP:8765/mcp"
+
+curl -sS -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":404,"method":"tools/call","params":{"name":"get_test_run_report","arguments":{"runId":"<run-id>","format":"manifest"}}}' \
+  "http://$HOST_IP:8765/mcp"
+```
+
 ### Extension lifecycle live probe
 
 The extension lifecycle rollout currently has two live verification layers:

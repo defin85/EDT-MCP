@@ -122,6 +122,14 @@ public class SseSessionRegistry
         public void markClosed()
         {
             closed = true;
+            try
+            {
+                outputStream.close();
+            }
+            catch (IOException e)
+            {
+                // Ignore close failures while evicting stale SSE sessions.
+            }
         }
 
         private boolean write(String payload)

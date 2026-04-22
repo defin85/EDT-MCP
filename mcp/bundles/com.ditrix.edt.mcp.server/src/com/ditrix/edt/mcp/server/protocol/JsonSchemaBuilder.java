@@ -66,6 +66,47 @@ public class JsonSchemaBuilder
         }
         return this;
     }
+
+    /**
+     * Adds a string property with a fixed set of allowed values.
+     *
+     * @param name property name
+     * @param description property description
+     * @param allowedValues supported values
+     * @return this builder
+     */
+    public JsonSchemaBuilder stringEnumProperty(String name, String description, List<String> allowedValues)
+    {
+        return stringEnumProperty(name, description, allowedValues, false);
+    }
+
+    /**
+     * Adds a string property with a fixed set of allowed values.
+     *
+     * @param name property name
+     * @param description property description
+     * @param allowedValues supported values
+     * @param required whether property is required
+     * @return this builder
+     */
+    public JsonSchemaBuilder stringEnumProperty(String name, String description, List<String> allowedValues,
+            boolean required)
+    {
+        Map<String, Object> prop = new LinkedHashMap<>();
+        prop.put("type", "string"); //$NON-NLS-1$ //$NON-NLS-2$
+        prop.put("description", description); //$NON-NLS-1$
+        if (allowedValues != null && !allowedValues.isEmpty())
+        {
+            prop.put("enum", new ArrayList<>(allowedValues)); //$NON-NLS-1$
+        }
+        properties.put(name, prop);
+
+        if (required)
+        {
+            this.required.add(name);
+        }
+        return this;
+    }
     
     /**
      * Adds an integer property to the schema.

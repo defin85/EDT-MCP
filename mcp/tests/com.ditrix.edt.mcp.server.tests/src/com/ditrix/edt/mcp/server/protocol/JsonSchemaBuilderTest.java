@@ -51,6 +51,18 @@ public class JsonSchemaBuilderTest
     }
 
     @Test
+    public void testStringEnumProperty()
+    {
+        String schema = JsonSchemaBuilder.object()
+            .stringEnumProperty("provider", "Supported provider", java.util.List.of("yaxunit", "vanessa"), true)
+            .build();
+
+        assertTrue(schema.contains("\"provider\""));
+        assertTrue(schema.contains("\"enum\":[\"yaxunit\",\"vanessa\"]"));
+        assertTrue(schema.contains("\"required\":[\"provider\"]"));
+    }
+
+    @Test
     public void testIntegerProperty()
     {
         String schema = JsonSchemaBuilder.object()
