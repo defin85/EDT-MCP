@@ -91,6 +91,7 @@ public final class UnitTestRunRecord
     public ToolResult toSummaryResult()
     {
         ToolResult result = ToolResult.success()
+                .put("success", isSuccessfulStatus()) //$NON-NLS-1$
                 .put("runId", runId) //$NON-NLS-1$
                 .put("provider", provider) //$NON-NLS-1$
                 .put("projectName", projectName) //$NON-NLS-1$
@@ -161,5 +162,10 @@ public final class UnitTestRunRecord
         return ToolResult.error("Unsupported report format: " + normalizedFormat) //$NON-NLS-1$
                 .put("runId", runId) //$NON-NLS-1$
                 .put("supportedFormats", reportFormats); //$NON-NLS-1$
+    }
+
+    private boolean isSuccessfulStatus()
+    {
+        return "passed".equals(status); //$NON-NLS-1$
     }
 }

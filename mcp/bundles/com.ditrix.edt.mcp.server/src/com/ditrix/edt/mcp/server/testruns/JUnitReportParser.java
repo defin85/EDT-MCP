@@ -18,6 +18,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
@@ -64,10 +65,11 @@ public final class JUnitReportParser
 
             if ("testsuite".equals(root.getTagName())) //$NON-NLS-1$
             {
-                tests = intAttribute(root, "tests"); //$NON-NLS-1$
-                failures = intAttribute(root, "failures"); //$NON-NLS-1$
-                errors = intAttribute(root, "errors"); //$NON-NLS-1$
-                skipped = skippedCount(root);
+                SuiteCounts counts = countSuite(root);
+                tests = counts.tests;
+                failures = counts.failures;
+                errors = counts.errors;
+                skipped = counts.skipped;
                 durationMs = durationMs(root);
                 collectFailedTests(root.getElementsByTagName("testcase"), failedTestsSample); //$NON-NLS-1$
             }
@@ -77,10 +79,11 @@ public final class JUnitReportParser
                 for (int index = 0; index < suites.getLength(); index++)
                 {
                     Element suite = (Element) suites.item(index);
-                    tests += intAttribute(suite, "tests"); //$NON-NLS-1$
-                    failures += intAttribute(suite, "failures"); //$NON-NLS-1$
-                    errors += intAttribute(suite, "errors"); //$NON-NLS-1$
-                    skipped += skippedCount(suite);
+                    SuiteCounts counts = countSuite(suite);
+                    tests += counts.tests;
+                    failures += counts.failures;
+                    errors += counts.errors;
+                    skipped += counts.skipped;
                     durationMs += durationMs(suite);
                 }
                 collectFailedTests(root.getElementsByTagName("testcase"), failedTestsSample); //$NON-NLS-1$
@@ -99,6 +102,59 @@ public final class JUnitReportParser
         {
             throw new IOException("Failed to parse JUnit report: " + e.getMessage(), e); //$NON-NLS-1$
         }
+    }
+
+    private static SuiteCounts countSuite(Element suite)
+    {
+        NodeList testCases = suite.getElementsByTagName("testcase"); //$NON-NLS-1$
+        if (testCases.getLength() == 0)
+        {
+            return new SuiteCounts(intAttribute(suite, "tests"), intAttribute(suite, "failures"), //$NON-NLS-1$ //$NON-NLS-2$
+                    intAttribute(suite, "errors"), skippedCount(suite)); //$NON-NLS-1$
+        }
+
+        int failures = 0;
+        int errors = 0;
+        int skipped = 0;
+        for (int index = 0; index < testCases.getLength(); index++)
+        {
+            Element testCase = (Element) testCases.item(index);
+            boolean hasFailure = testCase.getElementsByTagName("failure").getLength() > 0; //$NON-NLS-1$
+            boolean hasError = testCase.getElementsByTagName("error").getLength() > 0; //$NON-NLS-1$
+            if (hasError)
+            {
+                errors++;
+            }
+            else if (hasFailure)
+            {
+                failures++;
+            }
+            else if (testCase.getElementsByTagName("skipped").getLength() > 0) //$NON-NLS-1$
+            {
+                skipped++;
+            }
+        }
+
+        int suiteLevelErrors = directChildCount(suite, "error"); //$NON-NLS-1$
+        return new SuiteCounts(Math.max(intAttribute(suite, "tests"), testCases.getLength()), //$NON-NLS-1$
+                Math.max(intAttribute(suite, "failures"), failures), //$NON-NLS-1$
+                Math.max(Math.max(intAttribute(suite, "errors"), errors), suiteLevelErrors), //$NON-NLS-1$
+                skipped);
+    }
+
+    private static int directChildCount(Element element, String tagName)
+    {
+        int count = 0;
+        NodeList children = element.getChildNodes();
+        for (int index = 0; index < children.getLength(); index++)
+        {
+            Node child = children.item(index);
+            if (child.getNodeType() == Node.ELEMENT_NODE && tagName.equals(child.getNodeName()))
+            {
+                count++;
+            }
+        }
+        return count;
     }
 
     private static int skippedCount(Element suite)
@@ -170,6 +226,22 @@ public final class JUnitReportParser
             {
                 failedTestsSample.add(testName);
             }
+        }
+    }
+
+    private static final class SuiteCounts
+    {
+        private final int tests;
+        private final int failures;
+        private final int errors;
+        private final int skipped;
+
+        private SuiteCounts(int tests, int failures, int errors, int skipped)
+        {
+            this.tests = tests;
+            this.failures = failures;
+            this.errors = errors;
+            this.skipped = skipped;
         }
     }
 

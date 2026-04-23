@@ -63,15 +63,19 @@ the repository module produces:
 
 - `com.ditrix.edt.mcp.server.repository-1.0.0-SNAPSHOT.zip` — mutable latest build
 - `com.ditrix.edt.mcp.server.repository-1.0.0-SNAPSHOT-YYYYMMDDHHMMSS.zip` — immutable per-build local update site
-- `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site/` — stable composite local update site
-- `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site.zip` — stable ZIP wrapper over the same composite local update site
+- `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site/` — stable latest-only local update site
+- `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site.zip` — stable ZIP wrapper over the same latest-only local update site
+- `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site-history/` — composite archive of previous local builds
+- `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site-history.zip` — ZIP wrapper over the same history archive
 
-For repeated local reinstall/update testing in EDT, prefer the timestamped ZIP so `p2` does not
-lose the previously installed build from the same repository URL.
+For repeated local reinstall/update testing in EDT, use `local-update-site/` for normal **Update**
+operations when you want the stable path to expose only the newest build. Use the timestamped ZIP,
+an exact `releases/<version>/` child repository, or `local-update-site-history/` when you need an
+immutable reinstall/rollback source.
 
 If you want one constant local source path for repeated **Update** operations, point EDT to
-`local-update-site/` (or `local-update-site.zip`). It is a composite p2 repository that keeps
-previous local builds as child repositories instead of replacing them on every `clean verify`.
+`local-update-site/` (or `local-update-site.zip`). It is a latest-only p2 repository that is
+replaced on every `clean verify`, so EDT sees only the most recent local build from that URL.
 
 ### Installation Result
 

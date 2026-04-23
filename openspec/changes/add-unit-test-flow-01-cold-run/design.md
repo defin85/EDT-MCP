@@ -129,6 +129,10 @@ ecosystem.
   поэтому первый rollout должен отделять summary от report retrieval.
 - Live verification требует реального contour с установленным YAxUnit. Source-only validation не
   докажет runtime viability.
+- Даже после подтверждённого live path на DemoEDT `:8766` остался отдельный runtime/task residual:
+  слишком ранний `tasks/result` poll иногда отвечает transient HTTP `503`, хотя повторный poll в
+  той же `MCP-Session-Id` затем получает корректный terminal payload. Это не блокирует доказанный
+  cold-run flow, но требует отдельного follow-up в task/runtime contract.
 
 ## Migration Plan
 

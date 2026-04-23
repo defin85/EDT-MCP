@@ -62,7 +62,7 @@ public class GetTestRunReportToolTest
         String json = new GetTestRunReportTool().execute(Map.of("runId", "run-1", "format", "junit")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
 
         JsonObject payload = JsonParser.parseString(json).getAsJsonObject();
-        assertTrue(payload.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertFalse(payload.get("success").getAsBoolean()); //$NON-NLS-1$
         assertTrue(payload.get("found").getAsBoolean()); //$NON-NLS-1$
         assertEquals("junit", payload.get("format").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
         assertTrue(payload.get("report").getAsString().contains("testsuite")); //$NON-NLS-1$ //$NON-NLS-2$

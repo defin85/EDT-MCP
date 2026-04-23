@@ -32,7 +32,11 @@
 
 - [x] 4.1 Добавить focused Tycho/JUnit coverage для request validation, preflight failures,
       provider config materialization, retained run lookup, expiration и report parsing.
-- [ ] 4.2 Проверить live flow на реальном EDT contour с установленным YAxUnit: bare
+- [x] 4.2 Проверить live flow на реальном EDT contour с установленным YAxUnit: bare
       `run_unit_tests` -> task creation -> progress -> final summary -> `get_test_run_report`.
+      Live verification на DemoEDT `:8766` подтверждена, но остался отдельный residual runtime/task
+      нюанс: ранний `tasks/result` poll иногда возвращает transient HTTP `503` до появления final
+      payload; повторный poll в той же `MCP-Session-Id` затем успешно отдаёт terminal result.
+      Это нужно поправить отдельным follow-up, а не терять внутри текущего change.
 - [x] 4.3 Обновить `tests/TESTING.md` и verification notes с setup prerequisites, supported scope,
       live commands и явными limitation notes.

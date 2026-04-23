@@ -64,6 +64,10 @@
                 <argument>${project.basedir}/local-update-site</argument>
                 <argument>--zip-output</argument>
                 <argument>${project.basedir}/local-update-site.zip</argument>
+                <argument>--history-root</argument>
+                <argument>${project.basedir}/local-update-site-history</argument>
+                <argument>--history-zip-output</argument>
+                <argument>${project.basedir}/local-update-site-history.zip</argument>
               </arguments>
             </configuration>
           </execution>

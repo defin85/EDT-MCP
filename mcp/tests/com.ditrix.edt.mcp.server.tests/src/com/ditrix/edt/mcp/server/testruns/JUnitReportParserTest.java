@@ -61,4 +61,29 @@ public class JUnitReportParserTest
         assertEquals(500L, parsed.getDurationMs());
         assertTrue(parsed.getFailedTestsSample().contains("tests.B.Error")); //$NON-NLS-1$
     }
+
+    @Test
+    public void testParseYaxUnitSmokeReadErrorsWhenAttributesStayZero()
+            throws Exception
+    {
+        String xml = "<testsuites>" //$NON-NLS-1$
+                + "<testsuite name=\"ДТОткрытиеФорм\" classname=\"ДТОткрытиеФорм\" tests=\"1\" errors=\"0\" skipped=\"1\" failures=\"0\">" //$NON-NLS-1$
+                + "<error message=\"ЧтенияТестов: Ошибка формирования списка тестовых методов\" type=\"ЧтенияТестов\"/>" //$NON-NLS-1$
+                + "<testcase classname=\"ДТОткрытиеФорм.ИсполняемыеСценарии\" name=\"ИсполняемыеСценарии\">" //$NON-NLS-1$
+                + "<error message=\"ЧтенияТестов: Ошибка формирования списка тестовых методов\" type=\"ЧтенияТестов\"/>" //$NON-NLS-1$
+                + "</testcase>" //$NON-NLS-1$
+                + "</testsuite>" //$NON-NLS-1$
+                + "</testsuites>"; //$NON-NLS-1$
+
+        JUnitReportParser.ParsedJUnitReport parsed = JUnitReportParser.parse(xml);
+
+        assertEquals("failed", parsed.getStatus()); //$NON-NLS-1$
+        assertEquals(1, parsed.getTotal());
+        assertEquals(0, parsed.getPassed());
+        assertEquals(0, parsed.getFailed());
+        assertEquals(0, parsed.getSkipped());
+        assertEquals(1, parsed.getErrored());
+        assertEquals("ДТОткрытиеФорм.ИсполняемыеСценарии.ИсполняемыеСценарии", //$NON-NLS-1$
+                parsed.getFailedTestsSample().get(0));
+    }
 }

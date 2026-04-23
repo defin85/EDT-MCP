@@ -24,7 +24,8 @@ mvn -f mcp/pom.xml clean verify --batch-mode --no-transfer-progress -T 1C
 
 - Surefire reports в `mcp/tests/com.ditrix.edt.mcp.server.tests/target/surefire-reports/`
 - Local EDT update-site ZIPs в `mcp/repositories/com.ditrix.edt.mcp.server.repository/target/`, включая immutable build-specific `...-SNAPSHOT-YYYYMMDDHHMMSS.zip`
-- Stable local composite update site в `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site/` и `local-update-site.zip`
+- Stable local latest-only update site в `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site/` и `local-update-site.zip`
+- Optional history composite update site в `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site-history/` и `local-update-site-history.zip`
 
 ## Runtime Verify
 

@@ -13,6 +13,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-repository", required=True)
     parser.add_argument("--composite-root", required=True)
     parser.add_argument("--zip-output", required=True)
+    parser.add_argument("--history-root")
+    parser.add_argument("--history-zip-output")
     parser.add_argument("--plugin-id", default="com.ditrix.edt.mcp.server")
     parser.add_argument("--repository-name", default="EDT MCP Local Composite Repository")
     return parser.parse_args()
@@ -32,6 +34,12 @@ def copy_repository(source_repository: Path, composite_root: Path, version: str)
     if destination.exists():
         shutil.rmtree(destination)
     shutil.copytree(source_repository, destination)
+
+
+def replace_directory(source_directory: Path, destination_directory: Path) -> None:
+    if destination_directory.exists():
+        shutil.rmtree(destination_directory)
+    shutil.copytree(source_directory, destination_directory)
 
 
 def iter_children(composite_root: Path) -> list[str]:
@@ -94,20 +102,29 @@ def build_zip(source_dir: Path, zip_output: Path) -> None:
 def main() -> int:
     args = parse_args()
     source_repository = Path(args.source_repository).resolve()
-    composite_root = Path(args.composite_root).resolve()
+    latest_root = Path(args.composite_root).resolve()
     zip_output = Path(args.zip_output).resolve()
+    history_root = Path(args.history_root).resolve() if args.history_root else None
+    history_zip_output = Path(args.history_zip_output).resolve() if args.history_zip_output else None
 
     if not source_repository.exists():
         raise SystemExit(f"source repository does not exist: {source_repository}")
+    if (history_root is None) != (history_zip_output is None):
+        raise SystemExit("history-root and history-zip-output must be provided together")
 
-    composite_root.mkdir(parents=True, exist_ok=True)
     version = detect_version(source_repository, args.plugin_id)
-    copy_repository(source_repository, composite_root, version)
-    children = iter_children(composite_root)
-    write_composite_xml(composite_root, "artifact", args.repository_name, children)
-    write_composite_xml(composite_root, "metadata", args.repository_name, children)
-    write_p2_index(composite_root)
-    build_zip(composite_root, zip_output)
+
+    replace_directory(source_repository, latest_root)
+    build_zip(latest_root, zip_output)
+
+    if history_root and history_zip_output:
+        history_root.mkdir(parents=True, exist_ok=True)
+        copy_repository(source_repository, history_root, version)
+        children = iter_children(history_root)
+        write_composite_xml(history_root, "artifact", args.repository_name, children)
+        write_composite_xml(history_root, "metadata", args.repository_name, children)
+        write_p2_index(history_root)
+        build_zip(history_root, history_zip_output)
     return 0
 
 
