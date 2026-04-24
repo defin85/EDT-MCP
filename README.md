@@ -387,6 +387,13 @@ Add to `claude_desktop_config.json`:
 | `get_operation_snapshot` | Get the progress snapshot for a specific tracked long-running operation by `operationId` |
 | `get_active_operation` | Get the current long-running operation progress snapshot for polling fallback |
 | `debug_launch` | Launch application in debug mode (auto-updates database before launch); configuration-only in this rollout |
+| `list_debug_sessions` | List active supported EDT runtime debug sessions and thread summaries |
+| `list_debug_breakpoints` | List supported EDT BSL line breakpoints visible to the Eclipse breakpoint manager |
+| `set_debug_breakpoint` | Set a supported EDT BSL line breakpoint by project, module path, and 1-based line |
+| `remove_debug_breakpoint` | Remove a supported EDT BSL line breakpoint by MCP `breakpointId`, protecting user breakpoints by default |
+| `get_debug_stack` | Inspect stack frames for a suspended debug thread |
+| `get_debug_variables` | Inspect bounded frame variables or one expanded variable path |
+| `control_debug_session` | Dispatch basic debug actions: resume, suspend, step over/into/return, terminate |
 | `get_form_screenshot` | Capture PNG screenshot of form WYSIWYG editor (embedded image resource) |
 | `list_modules` | List all BSL modules in a project with module type and parent object |
 | `get_module_structure` | Get BSL module structure: procedures/functions, signatures, regions, parameters |
@@ -958,6 +965,87 @@ Warm-session states are `starting`, `ready`, `busy`, `stale`, and `dead`. Stale 
 - If no configuration exists, returns list of available configurations
 - `updateBeforeLaunch=true` skips update if database is already up to date
 - `debug_launch` is intentionally sync-first; task-style debug session lifecycle is handled separately from the MCP Tasks rollout
+
+#### Runtime Debug Control Tools
+
+**`list_debug_sessions`** - List active supported EDT runtime debug sessions. A supported session is an active Eclipse debug launch with launch type `com._1c.g5.v8.dt.launching.core.RuntimeClient`, resolvable EDT project/application attributes, and Eclipse debug model elements.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | No | Optional EDT project name filter |
+| `applicationId` | No | Optional application ID filter |
+
+**`list_debug_breakpoints`** - List supported EDT BSL line breakpoints visible to the Eclipse breakpoint manager.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | No | Optional EDT project name filter |
+| `modulePath` | No | Optional BSL module path relative to `src` |
+
+**`set_debug_breakpoint`** - Set a supported EDT BSL line breakpoint.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | EDT project name |
+| `modulePath` | Yes | BSL module path relative to `src`, e.g. `Documents/Заказ/Forms/ФормаДокумента/Module.bsl` |
+| `lineNumber` | Yes | 1-based source line number |
+| `persisted` | No | Persist the breakpoint in the EDT workspace. Default: `false` for MCP-created breakpoints |
+
+**`remove_debug_breakpoint`** - Remove a supported EDT BSL line breakpoint by `breakpointId`.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `breakpointId` | Yes | Breakpoint ID returned by `list_debug_breakpoints` or `set_debug_breakpoint` |
+| `removeUserBreakpoint` | No | Allow removal of a pre-existing breakpoint not created by MCP. Default: `false` |
+
+**`get_debug_stack`** - Read stack frames for a suspended thread returned by `list_debug_sessions`.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `threadId` | Yes | Thread ID returned by `list_debug_sessions` |
+| `maxFrames` | No | Maximum frames to return (default 100, max 200) |
+
+**`get_debug_variables`** - Read bounded variables for a suspended frame returned by `get_debug_stack`.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `frameId` | Yes | Frame ID returned by `get_debug_stack` |
+| `variablePath` | No | Optional variable path array to expand from the frame |
+| `maxVariables` | No | Maximum variables to return (default 100, max 200) |
+
+**`control_debug_session`** - Dispatch a basic debug action and return immediate state plus a polling hint.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `action` | Yes | `resume`, `suspend`, `step_over`, `step_into`, `step_return`, or `terminate` |
+| `threadId` | No | Required for `resume`, `suspend`, and step actions; returned by `list_debug_sessions` |
+| `sessionId` | No | Session ID returned by `list_debug_sessions`; usable for session-level `terminate` |
+
+**Runtime matrix and limitations:**
+- Initial live discovery on EDT 2024.2.5.16 observed 1C debug model classes `RuntimeDebugTargetThread`, `BslStackFrame`, `BslVariable`, `BslPrimitiveValue`, and `BslValuePath`.
+- The MCP bridge intentionally compiles against standard Eclipse `org.eclipse.debug.core.model` interfaces instead of 1C internal debug classes.
+- Stack and variables require a suspended thread/frame. Running or stale snapshots fail explicitly instead of fabricating partial data.
+- EDT target-level suspend can report a suspended debug target without thread stack frames; use thread-level control after an actual breakpoint/suspension point.
+- Variable reads are local trusted-tool operations; returned values may include application data visible to the debugger.
+- Breakpoint management is limited to EDT BSL line breakpoints backed by workspace `.bsl` files.
+- MCP-created breakpoints are non-persisted by default, carry an MCP ownership marker, and can be removed without deleting pre-existing user breakpoints.
+- `breakpointId` values are stable only within the current EDT workspace session/snapshot cache; refresh with `list_debug_breakpoints` after EDT restart or workspace reload.
+- Conditional breakpoints, hit-count conditions, watch expressions, expression evaluation, and value mutation are outside this rollout.
+
+**Live verification command shape:**
+
+```bash
+curl -sS -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_debug_sessions","arguments":{}}}' \
+  "http://<edt-host>:<port>/mcp"
+```
 
 ### BSL Code Analysis Tools
 

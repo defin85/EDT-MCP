@@ -44,6 +44,29 @@ session without pretending that the full EDT debugger UI is remotely available.
   - Rationale: the 1C:EDT debug model is the relevant product surface, and narrowing the scope
     keeps verification feasible.
 
+- Decision: `list_debug_sessions` includes every currently visible supported EDT runtime debug
+  session, not only sessions created by `debug_launch`.
+  - Supported means the Eclipse launch has the EDT runtime launch configuration type
+    `com._1c.g5.v8.dt.launching.core.RuntimeClient`, has resolvable EDT project/application
+    attributes, and exposes Eclipse debug model elements needed for the requested operation.
+  - Alternatives considered:
+    - include only sessions launched by this MCP server
+    - expose all Eclipse debug launches and let clients filter
+  - Rationale: agents often need to attach to a session already started from EDT UI, but exposing
+    arbitrary Eclipse launches would make the contract depend on debug models outside the 1C:EDT
+    runtime surface.
+
+- Decision: variable inspection is bounded and explicit about truncation.
+  - `get_debug_variables` returns a shallow frame view by default and accepts bounded expansion
+    controls for a selected variable path in the current frame snapshot.
+  - Responses must include `hasChildren`, `truncated`, and `expansionUnsupported` markers where
+    relevant instead of silently omitting children.
+  - Alternatives considered:
+    - recursively serialize the full variable tree
+    - require a separate expansion tool in the first rollout
+  - Rationale: debug values can be large or slow to resolve, and a single bounded tool keeps the
+    first MCP surface small while still allowing clients to drill into values deliberately.
+
 - Decision: return explicit precondition and unsupported-capability errors instead of silently
   degrading.
   - Alternatives considered:
@@ -58,6 +81,11 @@ session without pretending that the full EDT debugger UI is remotely available.
 - Thread and frame identities can become stale after resume/step transitions, which increases the
   need for precise error semantics.
 - Variable trees may be large or expensive to resolve and may need explicit truncation rules.
+- Variable values can expose local secrets or personal data from the debugged infobase; this is
+  acceptable only as a local trusted-tool capability and must be documented clearly.
+- Step and resume actions are state transitions, not long-running MCP tasks. A control call should
+  dispatch the requested action and return the immediate known state plus a poll hint for
+  `list_debug_sessions`/`get_debug_stack` instead of blocking until the next suspension point.
 - Live verification requires a real suspended EDT runtime session; source-only checks are not
   enough.
 
@@ -69,9 +97,23 @@ session without pretending that the full EDT debugger UI is remotely available.
 4. Implement basic control actions and safe precondition handling.
 5. Update README and agent-facing verification notes with the supported debugger matrix.
 
-## Open Questions
+## Live Discovery Matrix
 
-- Should `list_debug_sessions` include only sessions created by `debug_launch`, or every supported
-  EDT runtime debug session visible in the workspace?
-- How much variable-tree expansion should the first rollout return by default before pagination or
-  depth limits are required?
+- 2026-04-24 live EDT target: EDT 2024.2.5.16, DemoEDT workspace, installed bundle
+  `1.0.0.202604240918`.
+- Launch configuration observed in workspace:
+  - type: `com._1c.g5.v8.dt.launching.core.RuntimeClient`
+  - project: `Демонстрационная_конфигурация_Управляемое_приложение`
+  - applicationId: `8e939665-b67a-4ebe-a233-2a9bbc3c2251`
+  - client type: `com._1c.g5.v8.dt.platform.services.core.componentTypes.ThinClient`
+- Runtime diagnostics observed active EDT debug infrastructure:
+  - `com._1c.g5.v8.dt.internal.debug.core.model.RuntimeDebugTargetThread`
+  - `com._1c.g5.v8.dt.internal.debug.core.model.BslStackFrame`
+  - `com._1c.g5.v8.dt.internal.debug.core.model.BslVariable`
+  - `com._1c.g5.v8.dt.internal.debug.core.model.values.BslPrimitiveValue`
+  - `com._1c.g5.v8.dt.debug.core.model.values.BslValuePath`
+  - `com._1c.g5.v8.dt.internal.debug.core.runtime.client.RuntimeDebugHttpClient`
+  - `com._1c.g5.v8.dt.internal.debug.core.model.RuntimeEventDispatchJob`
+- Implementation consequence: compile against standard Eclipse debug interfaces
+  (`ILaunch`, `IDebugTarget`, `IThread`, `IStackFrame`, `IVariable`, `IValue`) and keep the
+  1C internal classes as runtime evidence only, not plugin dependencies.

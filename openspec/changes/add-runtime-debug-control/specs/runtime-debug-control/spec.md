@@ -4,7 +4,10 @@
 
 The system SHALL expose supported EDT runtime debug sessions through `list_debug_sessions` and
 SHALL filter out unrelated Eclipse debug launches that do not satisfy the supported runtime debug
-model for this capability.
+model for this capability. A supported session is an active Eclipse debug launch for the EDT runtime
+launch configuration type `com._1c.g5.v8.dt.launching.core.RuntimeClient` whose project and
+application identifiers resolve to a configuration-project application target and whose debug model
+exposes the standard Eclipse session/thread/frame capabilities required by the requested operation.
 
 #### Scenario: Client lists active supported debug sessions
 
@@ -30,7 +33,9 @@ handles.
 ### Requirement: Snapshot-Based Variable Inspection
 
 The system SHALL expose variables and nested value metadata for a selected suspended frame through
-`get_debug_variables` without requiring the client to understand Eclipse debug model classes.
+`get_debug_variables` without requiring the client to understand Eclipse debug model classes. The
+tool SHALL bound variable expansion by default and SHALL make truncation or unsupported expansion
+explicit in the response.
 
 #### Scenario: Client inspects variables in a suspended frame
 
@@ -38,18 +43,23 @@ The system SHALL expose variables and nested value metadata for a selected suspe
   session snapshot
 - **THEN** the server returns variable names, display values, type hints or capability flags, and
   child-expansion metadata
-- **AND** the response makes truncated or unsupported value expansion explicit
+- **AND** the response includes explicit `hasChildren`, `truncated`, and `expansionUnsupported`
+  indicators where applicable
 
 ### Requirement: Basic Execution Control For Supported Sessions
 
 The system SHALL let clients issue basic execution-control actions for supported debug sessions or
-their threads through `control_debug_session`.
+their threads through `control_debug_session`. Control actions SHALL dispatch the requested debugger
+state transition and return the immediate known state plus the next inspection or polling hint; the
+tool SHALL NOT block indefinitely waiting for a later suspension point. `resume`, `suspend`, and
+step actions SHALL require a thread identifier from a supported debug-session snapshot; session-level
+control SHALL be limited to `terminate` in this rollout.
 
 #### Scenario: Client steps a suspended thread
 
-- **WHEN** a client invokes `control_debug_session` with a supported action such as `resume`,
-  `suspend`, `step_over`, `step_into`, `step_return`, or `terminate`
-- **AND** the addressed session or thread satisfies the action preconditions
+- **WHEN** a client invokes `control_debug_session` with a supported thread action such as `resume`,
+  `suspend`, `step_over`, `step_into`, or `step_return`
+- **AND** the addressed thread satisfies the action preconditions
 - **THEN** the server applies the action through the supported EDT debug backend
 - **AND** the response reports the resulting state or the next required client action
 

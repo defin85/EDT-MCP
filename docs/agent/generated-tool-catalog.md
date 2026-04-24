@@ -3,8 +3,8 @@
 
 Этот файл генерируется из `tools/impl/*Tool.java` и служит fast reference для Codex.
 
-- Tool implementations found: `49`
-- Tool names documented in `README.md`: `49`
+- Tool implementations found: `56`
+- Tool names documented in `README.md`: `56`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
 ## Tool Map
@@ -15,6 +15,7 @@
 | `apply_extension_to_infobase` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ApplyExtensionToInfobaseTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/ApplyExtensionToInfobaseToolTest.java` | `mixed` | - |
 | `check_extension_applicability` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/CheckExtensionApplicabilityTool.java` | `-` | `mixed` | - |
 | `clean_project` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/CleanProjectTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
+| `control_debug_session` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ControlDebugSessionTool.java` | `-` | `mixed` | - |
 | `debug_launch` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/DebugLaunchTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `delete_metadata_object` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/DeleteMetadataObjectTool.java` | `-` | `mutation/refactoring` | - |
 | `find_references` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/FindReferencesTool.java` | `-` | `analysis/navigation` | - |
@@ -24,6 +25,8 @@
 | `get_check_description` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetCheckDescriptionTool.java` | `-` | `read/discovery` | - |
 | `get_configuration_properties` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetConfigurationPropertiesTool.java` | `-` | `read/discovery` | - |
 | `get_content_assist` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetContentAssistTool.java` | `-` | `read/discovery` | - |
+| `get_debug_stack` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetDebugStackTool.java` | `-` | `read/discovery` | - |
+| `get_debug_variables` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetDebugVariablesTool.java` | `-` | `read/discovery` | - |
 | `get_edt_version` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetEdtVersionTool.java` | `-` | `read/discovery` | - |
 | `get_extension_properties` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetExtensionPropertiesTool.java` | `-` | `read/discovery` | - |
 | `get_extension_runtime_targets` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetExtensionRuntimeTargetsTool.java` | `-` | `read/discovery` | - |
@@ -44,6 +47,8 @@
 | `get_test_run_report` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTestRunReportTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetTestRunReportToolTest.java` | `read/discovery` | - |
 | `get_test_session_status` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTestSessionStatusTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetTestSessionStatusToolTest.java` | `read/discovery` | - |
 | `go_to_definition` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GoToDefinitionTool.java` | `-` | `analysis/navigation` | - |
+| `list_debug_breakpoints` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListDebugBreakpointsTool.java` | `-` | `read/discovery` | - |
+| `list_debug_sessions` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListDebugSessionsTool.java` | `-` | `read/discovery` | - |
 | `list_infobase_extensions` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListInfobaseExtensionsTool.java` | `-` | `read/discovery` | - |
 | `list_modules` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListModulesTool.java` | `-` | `read/discovery` | - |
 | `list_projects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListProjectsTool.java` | `-` | `read/discovery` | - |
@@ -53,10 +58,12 @@
 | `read_method_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ReadMethodSourceTool.java` | `-` | `mixed` | - |
 | `read_module_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ReadModuleSourceTool.java` | `-` | `mixed` | - |
 | `recycle_test_session` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RecycleTestSessionTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/RecycleTestSessionToolTest.java` | `mixed` | - |
+| `remove_debug_breakpoint` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RemoveDebugBreakpointTool.java` | `-` | `mixed` | - |
 | `rename_metadata_object` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RenameMetadataObjectTool.java` | `-` | `mutation/refactoring` | - |
 | `revalidate_objects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RevalidateObjectsTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `run_unit_tests` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RunUnitTestsTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/RunUnitTestsToolTest.java` | `mixed` | - |
 | `search_in_code` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/SearchInCodeTool.java` | `-` | `mixed` | - |
+| `set_debug_breakpoint` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/SetDebugBreakpointTool.java` | `-` | `mixed` | - |
 | `update_database` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/UpdateDatabaseTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `validate_query` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ValidateQueryTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/ValidateQueryToolTest.java` | `analysis/navigation` | - |
 | `write_module_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/WriteModuleSourceTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/WriteModuleSourceToolTest.java` | `mutation/refactoring` | - |

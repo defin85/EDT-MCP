@@ -74,6 +74,13 @@ import com.ditrix.edt.mcp.server.tools.impl.PrepareTestSessionTool;
 import com.ditrix.edt.mcp.server.tools.impl.ProbeExtensionSyncBridgeTool;
 import com.ditrix.edt.mcp.server.tools.impl.ProbeExtensionXmlContractTool;
 import com.ditrix.edt.mcp.server.tools.impl.CleanProjectTool;
+import com.ditrix.edt.mcp.server.tools.impl.ControlDebugSessionTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetDebugStackTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetDebugVariablesTool;
+import com.ditrix.edt.mcp.server.tools.impl.ListDebugSessionsTool;
+import com.ditrix.edt.mcp.server.tools.impl.ListDebugBreakpointsTool;
+import com.ditrix.edt.mcp.server.tools.impl.RemoveDebugBreakpointTool;
+import com.ditrix.edt.mcp.server.tools.impl.SetDebugBreakpointTool;
 import com.ditrix.edt.mcp.server.tools.impl.RevalidateObjectsTool;
 import com.ditrix.edt.mcp.server.tools.impl.UpdateDatabaseTool;
 import com.ditrix.edt.mcp.server.tools.impl.ReadModuleSourceTool;
@@ -301,6 +308,13 @@ public class McpServer
         registry.register(new GetOperationSnapshotTool());
         registry.register(new GetActiveOperationTool());
         registry.register(new DebugLaunchTool());
+        registry.register(new ListDebugSessionsTool());
+        registry.register(new GetDebugStackTool());
+        registry.register(new GetDebugVariablesTool());
+        registry.register(new ControlDebugSessionTool());
+        registry.register(new ListDebugBreakpointsTool());
+        registry.register(new SetDebugBreakpointTool());
+        registry.register(new RemoveDebugBreakpointTool());
 
         // BSL code analysis tools
         registry.register(new ReadModuleSourceTool());
