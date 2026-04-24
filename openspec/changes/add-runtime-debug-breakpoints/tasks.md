@@ -58,7 +58,7 @@ attribute was retained until deletion.
 - [x] 4.2 Run the smallest relevant local build/test gate for the touched plugin and test modules.
 - [x] 4.3 Update `README.md` and generated agent docs with the supported breakpoint surface,
       limitations, and live verification flow.
-- [ ] 4.4 Live-verify in EDT: create a breakpoint through MCP, launch/debug the runtime, hit the
+- [x] 4.4 Live-verify in EDT: create a breakpoint through MCP, launch/debug the runtime, hit the
       breakpoint, inspect stack and variables using the existing debug tools, execute a successful
       thread-level step/resume action, and remove the breakpoint through MCP.
 
@@ -77,5 +77,21 @@ pre-existing warm-session/YAxUnit area, outside the breakpoint implementation. M
 verification remains open until the newly built plugin is installed into EDT. A skipped-test
 repository build produced the installable update site at
 `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site/` with
-`com.ditrix.edt.mcp.server_1.0.0.202604241333.jar`; the currently running live EDT MCP runtime still
-reports installed bundle `1.0.0.202604241112`.
+`com.ditrix.edt.mcp.server_1.0.0.202604241333.jar`; after reinstall, the live EDT MCP runtime
+reported installed bundle `1.0.0.202604241333`.
+
+Live verification note, 2026-04-24:
+`set_debug_breakpoint` created an MCP-owned, non-persisted `BslLineBreakpoint` at
+`Configuration/ManagedApplicationModule.bsl:11` in project
+`Демонстрационная_конфигурация_Управляемое_приложение` with marker type
+`com._1c.g5.v8.dt.debug.core.bslLineBreakpointMarker` and model id `com._1c.g5.v8.dt.debug`.
+`debug_launch` then started application `8e939665-b67a-4ebe-a233-2a9bbc3c2251` through launch
+configuration `Демонстрационная_конфигурация_Управляемое_приложение Тонкий клиент`. Polling
+`list_debug_sessions` observed a suspended thin-client thread with stack frames. `get_debug_stack`
+returned `МодульУправляемогоПриложения.ПриНачалеРаботыСистемы() строка: 11` with EDT source
+`/Демонстрационная_конфигурация_Управляемое_приложение/src/Configuration/ManagedApplicationModule.bsl`.
+`get_debug_variables` returned frame variables, including `Параметры = Неопределено`.
+`control_debug_session` `step_over` succeeded, and the next stack poll reported line 12.
+`remove_debug_breakpoint` removed the MCP-created breakpoint; a filtered `list_debug_breakpoints`
+returned `count=0`. `control_debug_session` `resume` succeeded, and a final session-level
+`terminate` cleanup left `list_debug_sessions` with `count=0`.
