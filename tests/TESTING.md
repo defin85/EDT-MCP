@@ -72,8 +72,16 @@ The first `run_unit_tests` cold-run slice now has checked-in unit coverage for:
 - retained `runId` lookup through `get_test_run_report`
 - JUnit XML parsing and report-store expiration
 
-Live YAxUnit execution on a real EDT contour is still a runtime evidence gap. Do not close the
-change on Tycho coverage alone.
+The warm-session slice now has checked-in unit coverage for:
+
+- session lifecycle contract and stable wire values
+- provider bridge prepare/recycle/execute result boundaries
+- `run_unit_tests.sessionMode` schema and fail-closed validation
+- reuse policy routing for `cold`, `prefer_warm`, `require_warm`, and `recycle_then_run`
+- YAxUnit RPC report payload conversion to retained JUnit XML
+
+Live YAxUnit cold and warm execution on a real EDT contour is still a runtime evidence gap. Do not
+close the change on Tycho coverage alone.
 
 ### Unit-test execution live verify
 
@@ -83,6 +91,8 @@ Current supported runtime slice:
 - configuration projects only
 - task-backed `run_unit_tests`
 - retained `get_test_run_report`
+- persistent session tools: `prepare_test_session`, `get_test_session_status`, `recycle_test_session`
+- warm execution through `run_unit_tests.sessionMode=prefer_warm|require_warm`
 
 Runtime prerequisites for honest live verification:
 
@@ -114,6 +124,36 @@ curl -sS -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":404,"method":"tools/call","params":{"name":"get_test_run_report","arguments":{"runId":"<run-id>","format":"manifest"}}}' \
   "http://$HOST_IP:8765/mcp"
 ```
+
+Warm-session verification sequence:
+
+```bash
+curl -sS -H 'Content-Type: application/json' \
+  -H 'MCP-Session-Id: test-session-1' \
+  -d '{"jsonrpc":"2.0","id":405,"method":"tools/call","params":{"name":"prepare_test_session","arguments":{"projectName":"<project>","applicationId":"<app-id>","provider":"yaxunit"}}}' \
+  "http://$HOST_IP:8765/mcp"
+
+curl -sS -H 'Content-Type: application/json' \
+  -H 'MCP-Session-Id: test-session-1' \
+  -d '{"jsonrpc":"2.0","id":406,"method":"tools/call","params":{"name":"run_unit_tests","arguments":{"projectName":"<project>","applicationId":"<app-id>","provider":"yaxunit","sessionMode":"require_warm","scope":"module","testModule":"<common-module>"}}}' \
+  "http://$HOST_IP:8765/mcp"
+
+curl -sS -H 'Content-Type: application/json' \
+  -H 'MCP-Session-Id: test-session-1' \
+  -d '{"jsonrpc":"2.0","id":407,"method":"tools/call","params":{"name":"get_test_session_status","arguments":{"sessionId":"<session-id>"}}}' \
+  "http://$HOST_IP:8765/mcp"
+
+curl -sS -H 'Content-Type: application/json' \
+  -H 'MCP-Session-Id: test-session-1' \
+  -d '{"jsonrpc":"2.0","id":408,"method":"tools/call","params":{"name":"recycle_test_session","arguments":{"sessionId":"<session-id>"}}}' \
+  "http://$HOST_IP:8765/mcp"
+```
+
+Expected warm proof:
+
+- `prepare_test_session` returns `state=ready` and provider correlation with `transport=ws`
+- `run_unit_tests` with `sessionMode=require_warm` returns `sessionOutcome=reused`
+- after `updateBeforeRun=true` or explicit recycle, a later `require_warm` returns `sessionOutcome=stale_rejected` instead of silently launching cold
 
 ### Extension lifecycle live probe
 

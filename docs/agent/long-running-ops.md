@@ -38,6 +38,9 @@
 - busy-state rejection может нести `_meta["io.ditrix.edt.mcp/blocking-operation"]` с `reasonCode`, `scope` и exact poll hint при однозначной корреляции
 - конфликтующие mutable task-backed операции явно отклоняются, а не запускаются параллельно
 - `run_unit_tests` ограничен `YAxUnit` provider и configuration-project targets; итоговый `runId` затем читается через `get_test_run_report`
+- warm unit-test reuse управляется отдельными `prepare_test_session`, `get_test_session_status`, `recycle_test_session` и `run_unit_tests.sessionMode`
+- `sessionMode=require_warm` fail-closed: missing/busy/stale/dead session не превращается в cold launch
+- текущий YAxUnit warm bridge использует provider-internal RPC/WebSocket и поддерживает один common-module run за раз; public MCP contract остаётся transport-agnostic
 - тяжёлые diagnostics остаются sync-only и опираются на summary/filter/limit shaping вместо task lifecycle
 - `get_operation_snapshot` даёт exact polling по stable `operationId`, а `get_active_operation` остаётся focused polling fallback с `detached: true` и structured `details`
 - cleanup/discoverability для `debug_launch` вынесены в отдельный runtime-debug-control трек, а не в этот task rollout
@@ -94,9 +97,14 @@
 2. Server validates `YAxUnit`-only provider/scope boundaries and configuration-project target
 3. Runtime preflight verifies application target, access settings, thick-client bridge, and installed `YAXUNIT` engine
 4. Optional incremental infobase update runs only when `updateBeforeRun=true`
-5. EDT thick-client launch executes `RunUnitTests=<temp-config>`
-6. Final task result retains stable `runId` plus summary counts
-7. `get_test_run_report` retrieves `summary`, `manifest`, or retained `junit` payload by `runId`
+5. `sessionMode` routes execution:
+   - `cold`: EDT thick-client launch executes `RunUnitTests=<temp-config>`
+   - `prefer_warm`: reuse ready warm session when available, otherwise cold launch
+   - `require_warm`: reuse ready warm session or fail with `sessionOutcome=stale_rejected`
+   - `recycle_then_run`: invalidate/terminate matching session before a new run
+6. Warm YAxUnit execution sends RPC `runTest` to the prepared Enterprise session for a single common module/test
+7. Final task result retains stable `runId` plus summary counts and `sessionOutcome`
+8. `get_test_run_report` retrieves `summary`, `manifest`, or retained `junit` payload by `runId`
 
 ## Early Revalidate Hang Diagnostics
 
@@ -143,7 +151,7 @@ Interpretation rules:
 - Build/test evidence: `tests/TESTING.md`, `mcp/tests/com.ditrix.edt.mcp.server.tests/`
 - Current evidence gaps:
 - detached tracker lifecycle и continuation hint покрыты unit-level contract tests, но live rebuild/update continuation всё ещё требует running EDT server
-- `run_unit_tests` contract, retention, and JUnit parsing have Tycho coverage, but live YAxUnit execution on a real EDT contour still remains a runtime evidence gap
+- `run_unit_tests` cold/warm contract, retention, session policy, and JUnit parsing have Tycho coverage, but live YAxUnit execution on a real EDT contour still remains a runtime evidence gap
 - early object-scoped `revalidate_objects` diagnostics are unit-covered for label/watchdog formatting, but live refresh-path evidence still depends on a real EDT workspace log
 
 ## Verify Strategy

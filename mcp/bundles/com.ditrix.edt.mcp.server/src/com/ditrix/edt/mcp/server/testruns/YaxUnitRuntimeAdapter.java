@@ -197,27 +197,26 @@ public final class YaxUnitRuntimeAdapter
         }
 
         String junitXml = Files.readString(invocation.getValue());
-        JUnitReportParser.ParsedJUnitReport parsed = JUnitReportParser.parse(junitXml);
-        Instant completedAt = Instant.now();
-        Instant expiresAt = completedAt.plusMillis(request.getRetentionTtlMs());
-        Map<String, Object> filters = buildPublicFilters(request);
-        UnitTestRunRecord record = new UnitTestRunRecord(request.getRunId(), PROVIDER, context.getProjectName(),
-                application.getId(), application.getName(), request.getScope(), parsed.getStatus(),
-                parsed.getStatus().equals("passed") ? "All tests passed" : "One or more unit tests failed", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-                parsed.getTotal(), parsed.getPassed(), parsed.getFailed(), parsed.getSkipped(), parsed.getErrored(),
-                parsed.getDurationMs(), completedAt, expiresAt,
-                List.of(UnitTestRunRecord.FORMAT_SUMMARY, UnitTestRunRecord.FORMAT_MANIFEST,
-                        UnitTestRunRecord.FORMAT_JUNIT),
-                parsed.getFailedTestsSample(), filters, junitXml);
-        return new ExecutionResult(record);
+        return new ExecutionResult(buildRecordFromJunit(junitXml, context, application, request));
     }
 
     static String buildConfigJson(RunRequest request, Path reportPath)
     {
+        return buildConfigJson(request, reportPath, true, null);
+    }
+
+    static String buildConfigJson(RunRequest request, Path reportPath, boolean closeAfterTests,
+            Map<String, Object> rpc)
+    {
         Map<String, Object> config = new LinkedHashMap<>();
         config.put("reportFormat", "jUnit"); //$NON-NLS-1$ //$NON-NLS-2$
         config.put("reportPath", reportPath.toAbsolutePath().toString()); //$NON-NLS-1$
-        config.put("closeAfterTests", Boolean.TRUE); //$NON-NLS-1$
+        config.put("closeAfterTests", Boolean.valueOf(closeAfterTests)); //$NON-NLS-1$
+        config.put("showReport", Boolean.FALSE); //$NON-NLS-1$
+        if (rpc != null && !rpc.isEmpty())
+        {
+            config.put("rpc", new LinkedHashMap<>(rpc)); //$NON-NLS-1$
+        }
         if (isSmokeExtension(request.getTestExtension()))
         {
             config.put("ДымовыеТесты", buildSmokeSettings()); //$NON-NLS-1$
@@ -228,6 +227,23 @@ public final class YaxUnitRuntimeAdapter
             config.put("filter", filter); //$NON-NLS-1$
         }
         return GsonProvider.toJson(config);
+    }
+
+    static UnitTestRunRecord buildRecordFromJunit(String junitXml, ResolvedConfigurationRuntimeContext context,
+            IApplication application, RunRequest request) throws IOException
+    {
+        JUnitReportParser.ParsedJUnitReport parsed = JUnitReportParser.parse(junitXml);
+        Instant completedAt = Instant.now();
+        Instant expiresAt = completedAt.plusMillis(request.getRetentionTtlMs());
+        Map<String, Object> filters = buildPublicFilters(request);
+        return new UnitTestRunRecord(request.getRunId(), PROVIDER, context.getProjectName(), application.getId(),
+                application.getName(), request.getScope(), parsed.getStatus(),
+                parsed.getStatus().equals("passed") ? "All tests passed" : "One or more unit tests failed", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                parsed.getTotal(), parsed.getPassed(), parsed.getFailed(), parsed.getSkipped(), parsed.getErrored(),
+                parsed.getDurationMs(), completedAt, expiresAt,
+                List.of(UnitTestRunRecord.FORMAT_SUMMARY, UnitTestRunRecord.FORMAT_MANIFEST,
+                        UnitTestRunRecord.FORMAT_JUNIT),
+                parsed.getFailedTestsSample(), filters, junitXml);
     }
 
     static boolean isSmokeExtension(String testExtension)
@@ -275,7 +291,7 @@ public final class YaxUnitRuntimeAdapter
         return filter;
     }
 
-    private static Map<String, Object> buildPublicFilters(RunRequest request)
+    static Map<String, Object> buildPublicFilters(RunRequest request)
     {
         Map<String, Object> filters = new LinkedHashMap<>();
         filters.put("scope", request.getScope()); //$NON-NLS-1$
@@ -404,7 +420,7 @@ public final class YaxUnitRuntimeAdapter
                 + expectedReportPath.toAbsolutePath());
     }
 
-    private static Process invokeRunClient(ConfigurationRuntimeContextResolver.ThickClientResolution thickClientResolution,
+    static Process invokeRunClient(ConfigurationRuntimeContextResolver.ThickClientResolution thickClientResolution,
             IInfobaseApplication infobaseApplication, RuntimeExecutionArguments arguments) throws Exception
     {
         ThickClientLauncher directLauncher = resolveDirectThickClientLauncher(thickClientResolution);
@@ -436,7 +452,7 @@ public final class YaxUnitRuntimeAdapter
                 + thickClientResolution.getLauncher().getClass().getName());
     }
 
-    private static void applyStoredAccessSettings(IInfobaseApplication infobaseApplication,
+    static void applyStoredAccessSettings(IInfobaseApplication infobaseApplication,
             RuntimeExecutionArguments arguments) throws Exception
     {
         if (infobaseApplication == null || arguments == null)

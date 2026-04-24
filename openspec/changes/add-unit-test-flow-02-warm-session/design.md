@@ -72,10 +72,14 @@ managed optimization:
 
 - Session identity:
   - `sessionId`
+  - `ownerSessionId` when the MCP request is session-scoped
   - `provider`
   - `projectName`
   - `applicationId`
   - optional provider-specific runtime correlation fields
+- Reuse scope:
+  - session reuse is bounded by `provider`, `projectName`, and `applicationId`
+  - `ownerSessionId` is part of ownership and visibility, not cross-target reuse eligibility
 - Session states:
   - `starting`
   - `ready`
@@ -102,6 +106,72 @@ managed optimization:
   - выполнять только на healthy warm session, иначе явный fail
 - `recycle_then_run`
   - сначала explicit recycle/replace, потом новый run
+
+Public request field: `sessionMode`.
+
+Public run outcomes:
+
+- `cold_started`
+- `reused`
+- `recycled`
+- `stale_rejected`
+
+Fail-closed rule: `require_warm` MUST NOT fall back to cold launch when a matching session is
+missing, `busy`, `stale`, or `dead`. It returns an actionable stale/dead/busy outcome with the
+matching session identity when known.
+
+## Provider Bridge Notes
+
+- YAxUnit warm execution uses provider-internal RPC over WebSocket, matching the upstream YAxUnit
+  external-control contract: the Enterprise client connects with `rpc.transport="ws"`, sends
+  `hello`, receives `runTest`, and answers with `report`.
+- `prepare_test_session` starts a persistent `RunUnitTests=<temp-config>` launch with
+  `closeAfterTests=false` and provider correlation (`transport`, `rpcPort`, `pid`,
+  `protocolVersion`) without exposing the RPC key in the MCP response.
+- Warm rerun sends the current source text of one common module to the prepared Enterprise session.
+  This mirrors the upstream hot-rerun boundary: one module/test can be rerun without restarting,
+  while broad scopes stay on cold launch unless a later provider implementation proves safe reuse.
+- Public MCP contract remains transport-agnostic: clients choose `sessionMode` and inspect
+  lifecycle state/outcomes; WebSocket framing is provider-private.
+
+## Tool Contracts
+
+`prepare_test_session` inputs:
+
+- `projectName`
+- `applicationId`
+- `provider` (`yaxunit` in this rollout)
+
+`prepare_test_session` output:
+
+- `sessionId`
+- `state`
+- target identity fields: `provider`, `projectName`, `applicationId`, optional `applicationName`
+- optional `ownerSessionId`
+- optional provider correlation fields
+
+`get_test_session_status` inputs:
+
+- `sessionId`
+
+`get_test_session_status` output:
+
+- current `state`
+- `reuseScope`
+- optional `staleReason`
+- optional `lastHeartbeatAt`
+- target identity fields
+
+`recycle_test_session` inputs:
+
+- `sessionId`
+
+`recycle_test_session` output:
+
+- `recycleOutcome`: `marked_stale`, `terminated`, or `replaced`
+- old `sessionId`
+- optional replacement `sessionId`
+- current snapshot or stale/dead reason
 
 ## Invalidation Rules
 

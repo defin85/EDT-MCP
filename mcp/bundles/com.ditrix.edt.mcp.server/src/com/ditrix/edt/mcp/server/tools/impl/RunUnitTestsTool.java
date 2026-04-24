@@ -6,6 +6,7 @@
 
 package com.ditrix.edt.mcp.server.tools.impl;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -26,6 +27,18 @@ import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tasks.TaskCancellationToken;
 import com.ditrix.edt.mcp.server.tasks.TaskSchedulingKey;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionMode;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionProviderBridge;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionRecycleOutcome;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionRegistry;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionRunOutcome;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionRunPolicy;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionSnapshot;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionStaleReason;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionState;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionTarget;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionToolContract;
+import com.ditrix.edt.mcp.server.testruns.UnitTestRunRecord;
 import com.ditrix.edt.mcp.server.testruns.UnitTestRunStore;
 import com.ditrix.edt.mcp.server.testruns.YaxUnitRuntimeAdapter;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
@@ -77,6 +90,9 @@ public class RunUnitTestsTool implements IMcpTool
                 .stringProperty("applicationId", "Application ID from get_applications (required)", true) //$NON-NLS-1$ //$NON-NLS-2$
                 .stringEnumProperty("provider", "Supported unit-test provider (default: yaxunit).", //$NON-NLS-1$ //$NON-NLS-2$
                         List.of(YaxUnitRuntimeAdapter.PROVIDER))
+                .stringEnumProperty(UnitTestSessionToolContract.FIELD_SESSION_MODE,
+                        "Warm-session policy: cold, prefer_warm, require_warm, or recycle_then_run (default: cold).", //$NON-NLS-1$
+                        supportedSessionModes())
                 .stringEnumProperty("scope", "Execution scope: all, module, suite, or test (default: all).", //$NON-NLS-1$ //$NON-NLS-2$
                         List.of("all", "module", "suite", "test")) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
                 .stringProperty("testExtension", "Test extension/filter root for YAxUnit (default: tests).") //$NON-NLS-1$ //$NON-NLS-2$
@@ -114,6 +130,8 @@ public class RunUnitTestsTool implements IMcpTool
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String applicationId = JsonUtils.extractStringArgument(params, "applicationId"); //$NON-NLS-1$
         String provider = normalizeProvider(JsonUtils.extractStringArgument(params, "provider")); //$NON-NLS-1$
+        UnitTestSessionMode sessionMode = UnitTestSessionMode
+                .fromWireValue(JsonUtils.extractStringArgument(params, UnitTestSessionToolContract.FIELD_SESSION_MODE));
         String scope = normalizeScope(JsonUtils.extractStringArgument(params, "scope")); //$NON-NLS-1$
         String testExtension = normalizeTestExtension(JsonUtils.extractStringArgument(params, "testExtension")); //$NON-NLS-1$
         String testModule = JsonUtils.extractStringArgument(params, "testModule"); //$NON-NLS-1$
@@ -140,6 +158,13 @@ public class RunUnitTestsTool implements IMcpTool
                     .put("runId", runId) //$NON-NLS-1$
                     .put("provider", provider) //$NON-NLS-1$
                     .put("supportedProviders", List.of(YaxUnitRuntimeAdapter.PROVIDER)) //$NON-NLS-1$
+                    .toJson();
+        }
+        if (sessionMode == null)
+        {
+            return ToolResult.error("Unsupported sessionMode. Supported values: " + supportedSessionModes()) //$NON-NLS-1$
+                    .put("runId", runId) //$NON-NLS-1$
+                    .put("supportedSessionModes", supportedSessionModes()) //$NON-NLS-1$
                     .toJson();
         }
         if (tagsExclude != null && !tagsExclude.isEmpty())
@@ -176,13 +201,13 @@ public class RunUnitTestsTool implements IMcpTool
             return notReadyResult.put("runId", runId).toJson(); //$NON-NLS-1$
         }
 
-        return runUnitTests(runId, projectName, applicationId, scope, testExtension, testModule, testPath, suiteName,
-                tagsInclude != null ? tagsInclude : List.of(), updateBeforeRun, timeoutSeconds);
+        return runUnitTests(runId, projectName, applicationId, sessionMode, scope, testExtension, testModule, testPath,
+                suiteName, tagsInclude != null ? tagsInclude : List.of(), updateBeforeRun, timeoutSeconds);
     }
 
-    private String runUnitTests(String runId, String projectName, String applicationId, String scope,
-            String testExtension, String testModule, String testPath, String suiteName, List<String> tagsInclude,
-            boolean updateBeforeRun, int timeoutSeconds)
+    private String runUnitTests(String runId, String projectName, String applicationId, UnitTestSessionMode sessionMode,
+            String scope, String testExtension, String testModule, String testPath, String suiteName,
+            List<String> tagsInclude, boolean updateBeforeRun, int timeoutSeconds)
     {
         McpServer server = Activator.getDefault() != null ? Activator.getDefault().getMcpServer() : null;
         if (server == null)
@@ -237,6 +262,9 @@ public class RunUnitTestsTool implements IMcpTool
                 return fail(reporter, runId, yaxUnitFailure);
             }
 
+            UnitTestSessionTarget sessionTarget = new UnitTestSessionTarget(YaxUnitRuntimeAdapter.PROVIDER,
+                    projectName, applicationId, applicationResolution.getApplication().getName());
+
             if (isCancelled(cancellationToken))
             {
                 return cancelled(reporter, runId);
@@ -251,6 +279,8 @@ public class RunUnitTestsTool implements IMcpTool
                 {
                     return fail(reporter, runId, updateFailure);
                 }
+                server.getUnitTestSessionRegistry().invalidateTarget(sessionTarget,
+                        UnitTestSessionStaleReason.INFOBASE_SYNC_PERFORMED);
             }
 
             reporter.stage(STAGE_PREPARE_PROVIDER, "Preparing YAxUnit configuration"); //$NON-NLS-1$
@@ -263,6 +293,52 @@ public class RunUnitTestsTool implements IMcpTool
                 return cancelled(reporter, runId);
             }
 
+            UnitTestSessionProviderBridge bridge = server.getUnitTestSessionProviderBridgeRegistry()
+                    .get(YaxUnitRuntimeAdapter.PROVIDER);
+            UnitTestSessionSnapshot matchingSession = server.getUnitTestSessionRegistry()
+                    .findLatestForTarget(currentOwnerSessionId(), sessionTarget);
+            UnitTestSessionRunPolicy.Decision decision = UnitTestSessionRunPolicy.decide(sessionMode, matchingSession,
+                    bridge != null, Instant.now());
+            String warmFallbackMessage = null;
+            if (UnitTestSessionRunPolicy.Route.REJECT.equals(decision.getRoute()))
+            {
+                return fail(reporter, runId, warmRejected(runId, sessionMode, decision.getMatchingSession(),
+                        "No reusable warm unit-test session is available for this target.")); //$NON-NLS-1$
+            }
+            if (UnitTestSessionRunPolicy.Route.RECYCLE_THEN_COLD.equals(decision.getRoute()))
+            {
+                ToolResult recycleFailure = recycleBeforeRun(server, bridge, decision.getMatchingSession());
+                if (recycleFailure != null)
+                {
+                    return fail(reporter, runId, recycleFailure
+                            .put(UnitTestSessionToolContract.FIELD_SESSION_MODE, sessionMode.wireValue())
+                            .put(UnitTestSessionToolContract.FIELD_SESSION_OUTCOME,
+                                    UnitTestSessionRunOutcome.STALE_REJECTED.wireValue()));
+                }
+            }
+            if (UnitTestSessionRunPolicy.Route.WARM.equals(decision.getRoute()))
+            {
+                WarmExecutionAttempt warmAttempt = executeWarmSession(server, bridge, decision.getMatchingSession(),
+                        request);
+                if (warmAttempt.isSuccess())
+                {
+                    reporter.stage(STAGE_PARSE_REPORT, "Retaining warm-session unit-test report"); //$NON-NLS-1$
+                    server.getUnitTestRunStore().put(warmAttempt.getRecord());
+
+                    reporter.stage(STAGE_COMPLETION, "Warm unit-test run completed"); //$NON-NLS-1$
+                    reporter.completed("Warm unit-test run completed"); //$NON-NLS-1$
+                    return summaryResult(warmAttempt.getRecord(), sessionMode, UnitTestSessionRunOutcome.REUSED,
+                            warmAttempt.getSessionSnapshot(), null).toJson();
+                }
+                if (sessionMode.requiresReusableWarmSession())
+                {
+                    return fail(reporter, runId, warmRejected(runId, sessionMode, warmAttempt.getSessionSnapshot(),
+                            warmAttempt.getMessage()));
+                }
+                matchingSession = warmAttempt.getSessionSnapshot();
+                warmFallbackMessage = warmAttempt.getMessage();
+            }
+
             reporter.stage(STAGE_LAUNCH, "Launching YAxUnit via EDT runtime bridge"); //$NON-NLS-1$
             YaxUnitRuntimeAdapter.ExecutionResult executionResult = YaxUnitRuntimeAdapter.execute(NAME,
                     contextResolution.getContext(), applicationResolution.getApplication(),
@@ -273,8 +349,10 @@ public class RunUnitTestsTool implements IMcpTool
 
             reporter.stage(STAGE_COMPLETION, "Unit-test run completed"); //$NON-NLS-1$
             reporter.completed("Unit-test run completed"); //$NON-NLS-1$
-            return executionResult.getRecord().toSummaryResult()
-                    .put("provider", YaxUnitRuntimeAdapter.PROVIDER) //$NON-NLS-1$
+            UnitTestSessionRunOutcome outcome = UnitTestSessionMode.RECYCLE_THEN_RUN.equals(sessionMode)
+                    ? UnitTestSessionRunOutcome.RECYCLED
+                    : UnitTestSessionRunOutcome.COLD_STARTED;
+            return summaryResult(executionResult.getRecord(), sessionMode, outcome, matchingSession, warmFallbackMessage)
                     .toJson();
         }
         catch (Exception e)
@@ -286,6 +364,174 @@ public class RunUnitTestsTool implements IMcpTool
         {
             clearActiveOperation(server, context);
         }
+    }
+
+    private WarmExecutionAttempt executeWarmSession(McpServer server, UnitTestSessionProviderBridge bridge,
+            UnitTestSessionSnapshot session, YaxUnitRuntimeAdapter.RunRequest request)
+    {
+        if (server == null || bridge == null || session == null)
+        {
+            return WarmExecutionAttempt.failed(session, "No provider bridge is registered for warm unit-test execution."); //$NON-NLS-1$
+        }
+
+        UnitTestSessionRegistry registry = server.getUnitTestSessionRegistry();
+        UnitTestSessionRegistry.BusyAcquisition acquisition = registry.tryAcquireBusy(session.getSessionId(),
+                request.getRunId());
+        if (!acquisition.isAcquired())
+        {
+            UnitTestSessionSnapshot current = acquisition.getSnapshot() != null ? acquisition.getSnapshot() : session;
+            return WarmExecutionAttempt.failed(current,
+                    "Warm unit-test session is not ready for reuse: " + current.getState().wireValue()); //$NON-NLS-1$
+        }
+
+        UnitTestSessionSnapshot busySnapshot = acquisition.getSnapshot();
+        try
+        {
+            UnitTestSessionProviderBridge.ExecuteResult result = bridge.execute(
+                    new UnitTestSessionProviderBridge.ExecuteRequest(NAME, busySnapshot, request, Map.of()));
+            if (result == null)
+            {
+                UnitTestSessionSnapshot stale = registry.markStale(session.getSessionId(),
+                        UnitTestSessionStaleReason.PROVIDER_ERROR);
+                return WarmExecutionAttempt.failed(stale, "Provider bridge returned no warm execution result"); //$NON-NLS-1$
+            }
+            if (!result.isSuccess())
+            {
+                UnitTestSessionSnapshot stale = registry.markStale(session.getSessionId(),
+                        UnitTestSessionStaleReason.PROVIDER_ERROR);
+                String message = result.getFailureResult() != null ? result.getFailureResult().toJson()
+                        : "Provider bridge failed warm unit-test execution"; //$NON-NLS-1$
+                return WarmExecutionAttempt.failed(stale, message);
+            }
+            UnitTestSessionSnapshot updated = result.getUpdatedSnapshot();
+            if (updated != null)
+            {
+                registry.put(updated);
+            }
+            UnitTestSessionSnapshot ready = registry.releaseBusy(session.getSessionId(), request.getRunId());
+            return WarmExecutionAttempt.executed(result.getRecord(), ready != null ? ready : updated);
+        }
+        catch (Exception e)
+        {
+            Activator.logError("Warm run_unit_tests execution failed", e); //$NON-NLS-1$
+            UnitTestSessionSnapshot stale = registry.markStale(session.getSessionId(),
+                    UnitTestSessionStaleReason.PROVIDER_ERROR);
+            return WarmExecutionAttempt.failed(stale, "Failed to execute warm unit-test run: " + e.getMessage()); //$NON-NLS-1$
+        }
+    }
+
+    private ToolResult recycleBeforeRun(McpServer server, UnitTestSessionProviderBridge bridge,
+            UnitTestSessionSnapshot matchingSession)
+    {
+        if (server == null || matchingSession == null)
+        {
+            return null;
+        }
+        UnitTestSessionRegistry registry = server.getUnitTestSessionRegistry();
+        if (bridge == null)
+        {
+            markStaleWithoutDowngrade(registry, matchingSession, UnitTestSessionStaleReason.EXPLICIT_RECYCLE);
+            return null;
+        }
+        try
+        {
+            UnitTestSessionProviderBridge.RecycleResult result = bridge.recycle(
+                    new UnitTestSessionProviderBridge.RecycleRequest(NAME, matchingSession.getSessionId(),
+                            matchingSession));
+            if (result == null)
+            {
+                UnitTestSessionSnapshot stale = markStaleWithoutDowngrade(registry, matchingSession,
+                        UnitTestSessionStaleReason.PROVIDER_ERROR);
+                return ToolResult.error("Provider bridge returned no recycle result").put("session", //$NON-NLS-1$ //$NON-NLS-2$
+                        stale != null ? stale.toPublicMap() : null);
+            }
+            if (!result.isSuccess())
+            {
+                UnitTestSessionSnapshot stale = markStaleWithoutDowngrade(registry, matchingSession,
+                        UnitTestSessionStaleReason.PROVIDER_ERROR);
+                ToolResult failure = result.getFailureResult() != null ? result.getFailureResult()
+                        : ToolResult.error("Provider bridge failed to recycle test session"); //$NON-NLS-1$
+                return failure.put("session", stale != null ? stale.toPublicMap() : null); //$NON-NLS-1$
+            }
+            applyRecycleOutcome(registry, matchingSession, result.getOutcome(), result.getReplacementSnapshot());
+            return null;
+        }
+        catch (Exception e)
+        {
+            UnitTestSessionSnapshot stale = markStaleWithoutDowngrade(registry, matchingSession,
+                    UnitTestSessionStaleReason.PROVIDER_ERROR);
+            return ToolResult.error("Failed to recycle warm unit-test session before run: " + e.getMessage()) //$NON-NLS-1$
+                    .put("session", stale != null ? stale.toPublicMap() : null); //$NON-NLS-1$
+        }
+    }
+
+    private static UnitTestSessionSnapshot applyRecycleOutcome(UnitTestSessionRegistry registry,
+            UnitTestSessionSnapshot current, UnitTestSessionRecycleOutcome outcome, UnitTestSessionSnapshot replacement)
+    {
+        if (UnitTestSessionRecycleOutcome.TERMINATED.equals(outcome))
+        {
+            return registry.markDead(current.getSessionId(), UnitTestSessionStaleReason.EXPLICIT_RECYCLE);
+        }
+        if (UnitTestSessionRecycleOutcome.REPLACED.equals(outcome))
+        {
+            UnitTestSessionSnapshot old = markStaleWithoutDowngrade(registry, current,
+                    UnitTestSessionStaleReason.EXPLICIT_RECYCLE);
+            if (replacement != null)
+            {
+                registry.put(replacement);
+            }
+            return old;
+        }
+        if (UnitTestSessionRecycleOutcome.MARKED_STALE.equals(outcome))
+        {
+            return markStaleWithoutDowngrade(registry, current, UnitTestSessionStaleReason.EXPLICIT_RECYCLE);
+        }
+        return markStaleWithoutDowngrade(registry, current, UnitTestSessionStaleReason.PROVIDER_ERROR);
+    }
+
+    private static UnitTestSessionSnapshot markStaleWithoutDowngrade(UnitTestSessionRegistry registry,
+            UnitTestSessionSnapshot current, UnitTestSessionStaleReason reason)
+    {
+        if (UnitTestSessionState.DEAD.equals(current.getState()))
+        {
+            return current;
+        }
+        return registry.markStale(current.getSessionId(), reason);
+    }
+
+    private static ToolResult summaryResult(UnitTestRunRecord record, UnitTestSessionMode mode,
+            UnitTestSessionRunOutcome outcome, UnitTestSessionSnapshot session, String warmFallbackMessage)
+    {
+        ToolResult result = record.toSummaryResult()
+                .put("provider", YaxUnitRuntimeAdapter.PROVIDER) //$NON-NLS-1$
+                .put(UnitTestSessionToolContract.FIELD_SESSION_MODE, mode.wireValue())
+                .put(UnitTestSessionToolContract.FIELD_SESSION_OUTCOME, outcome.wireValue());
+        if (session != null)
+        {
+            result.put(UnitTestSessionToolContract.FIELD_SESSION_ID, session.getSessionId());
+            result.put("session", session.toPublicMap()); //$NON-NLS-1$
+        }
+        if (warmFallbackMessage != null && !warmFallbackMessage.isBlank())
+        {
+            result.put("warmFallbackMessage", warmFallbackMessage); //$NON-NLS-1$
+        }
+        return result;
+    }
+
+    private static ToolResult warmRejected(String runId, UnitTestSessionMode mode, UnitTestSessionSnapshot session,
+            String message)
+    {
+        ToolResult result = ToolResult.error(message)
+                .put("runId", runId) //$NON-NLS-1$
+                .put(UnitTestSessionToolContract.FIELD_SESSION_MODE, mode.wireValue())
+                .put(UnitTestSessionToolContract.FIELD_SESSION_OUTCOME,
+                        UnitTestSessionRunOutcome.STALE_REJECTED.wireValue());
+        if (session != null)
+        {
+            result.put(UnitTestSessionToolContract.FIELD_SESSION_ID, session.getSessionId());
+            result.put("session", session.toPublicMap()); //$NON-NLS-1$
+        }
+        return result;
     }
 
     private ToolResult updateBeforeRun(IProject project, String applicationId,
@@ -407,5 +653,61 @@ public class RunUnitTestsTool implements IMcpTool
     private static String normalizeTestExtension(String testExtension)
     {
         return testExtension == null || testExtension.isBlank() ? DEFAULT_TEST_EXTENSION : testExtension.trim();
+    }
+
+    private static String currentOwnerSessionId()
+    {
+        ToolExecutionContext context = ToolExecutionContextHolder.get();
+        return context != null ? context.getSessionId() : null;
+    }
+
+    private static List<String> supportedSessionModes()
+    {
+        return List.of(UnitTestSessionMode.COLD.wireValue(), UnitTestSessionMode.PREFER_WARM.wireValue(),
+                UnitTestSessionMode.REQUIRE_WARM.wireValue(), UnitTestSessionMode.RECYCLE_THEN_RUN.wireValue());
+    }
+
+    private static final class WarmExecutionAttempt
+    {
+        private final UnitTestRunRecord record;
+        private final UnitTestSessionSnapshot sessionSnapshot;
+        private final String message;
+
+        private WarmExecutionAttempt(UnitTestRunRecord record, UnitTestSessionSnapshot sessionSnapshot, String message)
+        {
+            this.record = record;
+            this.sessionSnapshot = sessionSnapshot;
+            this.message = message;
+        }
+
+        static WarmExecutionAttempt executed(UnitTestRunRecord record, UnitTestSessionSnapshot sessionSnapshot)
+        {
+            return new WarmExecutionAttempt(record, sessionSnapshot, null);
+        }
+
+        static WarmExecutionAttempt failed(UnitTestSessionSnapshot sessionSnapshot, String message)
+        {
+            return new WarmExecutionAttempt(null, sessionSnapshot, message);
+        }
+
+        boolean isSuccess()
+        {
+            return record != null;
+        }
+
+        UnitTestRunRecord getRecord()
+        {
+            return record;
+        }
+
+        UnitTestSessionSnapshot getSessionSnapshot()
+        {
+            return sessionSnapshot;
+        }
+
+        String getMessage()
+        {
+            return message;
+        }
     }
 }

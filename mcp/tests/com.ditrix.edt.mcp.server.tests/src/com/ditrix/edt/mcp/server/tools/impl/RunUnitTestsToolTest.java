@@ -26,6 +26,10 @@ public class RunUnitTestsToolTest
 
         assertTrue(properties.getAsJsonObject("provider").getAsJsonArray("enum").toString().contains("yaxunit")); //$NON-NLS-1$ //$NON-NLS-2$
         assertTrue(properties.getAsJsonObject("scope").getAsJsonArray("enum").toString().contains("module")); //$NON-NLS-1$ //$NON-NLS-2$
+        assertTrue(properties.getAsJsonObject("sessionMode").getAsJsonArray("enum").toString() //$NON-NLS-1$ //$NON-NLS-2$
+                .contains("require_warm")); //$NON-NLS-1$
+        assertTrue(properties.getAsJsonObject("sessionMode").getAsJsonArray("enum").toString() //$NON-NLS-1$ //$NON-NLS-2$
+                .contains("recycle_then_run")); //$NON-NLS-1$
     }
 
     @Test
@@ -48,6 +52,18 @@ public class RunUnitTestsToolTest
         JsonObject payload = JsonParser.parseString(json).getAsJsonObject();
         assertTrue(!payload.get("success").getAsBoolean()); //$NON-NLS-1$
         assertTrue(payload.get("error").getAsString().contains("tagsExclude")); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    @Test
+    public void testExecuteRejectsUnsupportedSessionModeBeforeRuntimeResolution()
+    {
+        String json = new RunUnitTestsTool().execute(Map.of("projectName", "TestConfiguration", "applicationId", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                "app-1", "sessionMode", "fast")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+
+        JsonObject payload = JsonParser.parseString(json).getAsJsonObject();
+        assertTrue(!payload.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertTrue(payload.get("error").getAsString().contains("sessionMode")); //$NON-NLS-1$ //$NON-NLS-2$
+        assertTrue(payload.getAsJsonArray("supportedSessionModes").toString().contains("prefer_warm")); //$NON-NLS-1$ //$NON-NLS-2$
     }
 
     @Test

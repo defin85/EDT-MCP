@@ -37,7 +37,10 @@ import com.ditrix.edt.mcp.server.progress.ProgressEvent;
 import com.ditrix.edt.mcp.server.progress.SseSessionRegistry;
 import com.ditrix.edt.mcp.server.progress.ToolExecutionContext;
 import com.ditrix.edt.mcp.server.tasks.TaskRegistry;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionProviderBridgeRegistry;
+import com.ditrix.edt.mcp.server.testruns.UnitTestSessionRegistry;
 import com.ditrix.edt.mcp.server.testruns.UnitTestRunStore;
+import com.ditrix.edt.mcp.server.testruns.YaxUnitWarmSessionProviderBridge;
 import com.ditrix.edt.mcp.server.tools.McpToolRegistry;
 import com.ditrix.edt.mcp.server.tools.impl.GetBookmarksTool;
 import com.ditrix.edt.mcp.server.tools.impl.DebugLaunchTool;
@@ -61,17 +64,20 @@ import com.ditrix.edt.mcp.server.tools.impl.GetProblemSummaryTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetProjectErrorsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetServerBuildInfoTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetTagsTool;
+import com.ditrix.edt.mcp.server.tools.impl.GetTestSessionStatusTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetTestRunReportTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetObjectsByTagsTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetTasksTool;
 import com.ditrix.edt.mcp.server.tools.impl.ListProjectsTool;
 import com.ditrix.edt.mcp.server.tools.impl.ListInfobaseExtensionsTool;
+import com.ditrix.edt.mcp.server.tools.impl.PrepareTestSessionTool;
 import com.ditrix.edt.mcp.server.tools.impl.ProbeExtensionSyncBridgeTool;
 import com.ditrix.edt.mcp.server.tools.impl.ProbeExtensionXmlContractTool;
 import com.ditrix.edt.mcp.server.tools.impl.CleanProjectTool;
 import com.ditrix.edt.mcp.server.tools.impl.RevalidateObjectsTool;
 import com.ditrix.edt.mcp.server.tools.impl.UpdateDatabaseTool;
 import com.ditrix.edt.mcp.server.tools.impl.ReadModuleSourceTool;
+import com.ditrix.edt.mcp.server.tools.impl.RecycleTestSessionTool;
 import com.ditrix.edt.mcp.server.tools.impl.RunUnitTestsTool;
 import com.ditrix.edt.mcp.server.tools.impl.WriteModuleSourceTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetModuleStructureTool;
@@ -158,6 +164,13 @@ public class McpServer
     /** Retained summaries/reports for completed unit-test runs */
     private final UnitTestRunStore unitTestRunStore = new UnitTestRunStore();
 
+    /** Persistent unit-test session lifecycle state */
+    private final UnitTestSessionRegistry unitTestSessionRegistry = new UnitTestSessionRegistry();
+
+    /** Provider-side control bridges for persistent unit-test sessions */
+    private final UnitTestSessionProviderBridgeRegistry unitTestSessionProviderBridgeRegistry =
+            new UnitTestSessionProviderBridgeRegistry();
+
     /**
      * Starts the MCP server on the specified port.
      * 
@@ -171,7 +184,8 @@ public class McpServer
             stop();
         }
 
-        // Register tools
+        // Register provider bridges and tools
+        registerUnitTestSessionProviderBridges();
         registerTools();
         
         // Create protocol handler
@@ -280,6 +294,9 @@ public class McpServer
         registry.register(new GetApplicationsTool());
         registry.register(new UpdateDatabaseTool());
         registry.register(new RunUnitTestsTool());
+        registry.register(new PrepareTestSessionTool());
+        registry.register(new GetTestSessionStatusTool());
+        registry.register(new RecycleTestSessionTool());
         registry.register(new GetTestRunReportTool());
         registry.register(new GetOperationSnapshotTool());
         registry.register(new GetActiveOperationTool());
@@ -304,6 +321,13 @@ public class McpServer
         registry.register(new AddMetadataAttributeTool());
 
         Activator.logInfo("Registered " + registry.getToolCount() + " MCP tools"); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    private void registerUnitTestSessionProviderBridges()
+    {
+        unitTestSessionProviderBridgeRegistry.closeAll();
+        unitTestSessionProviderBridgeRegistry.clear();
+        unitTestSessionProviderBridgeRegistry.register(new YaxUnitWarmSessionProviderBridge());
     }
 
     /**
@@ -338,6 +362,9 @@ public class McpServer
             focusedOperationId = null;
             taskRegistry.clear();
             unitTestRunStore.clear();
+            unitTestSessionRegistry.clear();
+            unitTestSessionProviderBridgeRegistry.closeAll();
+            unitTestSessionProviderBridgeRegistry.clear();
             progressNotificationSender.clear();
             sseSessionRegistry.clear();
             Activator.logInfo("MCP Server stopped"); //$NON-NLS-1$
@@ -719,6 +746,16 @@ public class McpServer
     public UnitTestRunStore getUnitTestRunStore()
     {
         return unitTestRunStore;
+    }
+
+    public UnitTestSessionRegistry getUnitTestSessionRegistry()
+    {
+        return unitTestSessionRegistry;
+    }
+
+    public UnitTestSessionProviderBridgeRegistry getUnitTestSessionProviderBridgeRegistry()
+    {
+        return unitTestSessionProviderBridgeRegistry;
     }
 
     public Future<?> submitTask(Runnable runnable)

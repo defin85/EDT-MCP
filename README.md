@@ -14,7 +14,7 @@ MCP (Model Context Protocol) server plugin for 1C:EDT, enabling AI assistants (C
 - 🔖 **Bookmarks & Tasks** - Access bookmarks and TODO/FIXME markers
 - 💡 **Content Assist** - Get type info, method hints and platform documentation at any code position
 - 🧪 **Query Validation** - Validate 1C query text in project context (syntax + semantic errors, optional DCS mode)
-- 🧪 **Unit Test Execution** - Run retained `YAxUnit` unit-test flows through EDT runtime and retrieve reports by stable `runId`
+- 🧪 **Unit Test Execution** - Run retained `YAxUnit` unit-test flows through EDT runtime, reuse warm sessions, and retrieve reports by stable `runId`
 - 🧩 **BSL Code Analysis** - Browse modules, inspect structure, read/write methods, search code, and analyze call hierarchy
 - 🖼️ **Form Screenshot Capture** - Get PNG screenshots from the form WYSIWYG editor for visual inspection
 - 🚀 **Application Management** - Get applications, update database, run unit tests, and launch in debug mode
@@ -379,7 +379,10 @@ Add to `claude_desktop_config.json`:
 | `probe_extension_xml_contract` | Developer-oriented probe: compare the workspace `src` tree with EDT XML export layout for a selected extension target |
 | `get_applications` | Get list of applications (infobases) for a project with update state; configuration-only in this rollout |
 | `update_database` | Update database (infobase) with full or incremental update mode; async-first at runtime, explicit task augmentation, and configuration-only extension rejection |
-| `run_unit_tests` | Run `YAxUnit`-backed unit tests for a configuration project/application target; async-first at runtime with retained `runId` results |
+| `run_unit_tests` | Run `YAxUnit`-backed unit tests for a configuration project/application target; async-first at runtime with retained `runId` results and optional warm-session reuse |
+| `prepare_test_session` | Prepare or attach a persistent `YAxUnit` warm session for a project/application target |
+| `get_test_session_status` | Inspect a persistent unit-test session by stable `sessionId` |
+| `recycle_test_session` | Invalidate or terminate a persistent unit-test session by stable `sessionId` |
 | `get_test_run_report` | Read retained summary, manifest, or JUnit payload for a completed unit-test run by stable `runId` |
 | `get_operation_snapshot` | Get the progress snapshot for a specific tracked long-running operation by `operationId` |
 | `get_active_operation` | Get the current long-running operation progress snapshot for polling fallback |
@@ -845,6 +848,7 @@ Typical stages:
 | `projectName` | Yes | EDT configuration project name |
 | `applicationId` | Yes | Application ID from `get_applications` |
 | `provider` | No | Supported provider (`yaxunit` only in this rollout) |
+| `sessionMode` | No | `cold`, `prefer_warm`, `require_warm`, or `recycle_then_run` (default: `cold`) |
 | `scope` | No | `all`, `module`, `suite`, or `test` |
 | `testExtension` | No | YAxUnit test extension/filter root (default: `tests`) |
 | `testModule` | No | Required for `scope=module` |
@@ -858,6 +862,12 @@ Typical stages:
 - Only configuration-project targets are supported in the first rollout
 - Bare calls auto-promote into task-backed execution
 - The final task result returns a stable `runId`, machine-readable status, summary counts, and retained report formats
+- `sessionMode=cold` always uses the existing cold launch path
+- `sessionMode=prefer_warm` reuses a healthy prepared session when available and otherwise falls back to cold launch
+- `sessionMode=require_warm` fails closed with `sessionOutcome=stale_rejected` when a matching session is missing, busy, stale, dead, or not backed by a provider bridge
+- `sessionMode=recycle_then_run` recycles the matching session before starting a new run
+- Warm reuse is an optimization, not a correctness shortcut: infobase update before a run invalidates matching warm sessions
+- Current warm YAxUnit RPC execution supports one common-module run at a time (`scope=module` or `scope=test`); broader scopes can still use cold launch
 - `tagsExclude`, BDD/scenario flows, extension-project targets, and debug-mode execution stay fail-closed in this rollout
 - If the EDT runtime bridge or YAxUnit engine is unavailable, the tool returns an actionable failure instead of launching partially
 
@@ -869,6 +879,25 @@ Typical stages:
 - `launch`
 - `parse_report`
 - `completion` / `failure`
+
+#### Unit Test Session Tools
+
+**`prepare_test_session`** - Prepare or attach a persistent `YAxUnit` warm session for a configuration project/application target.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | EDT configuration project name |
+| `applicationId` | Yes | Application ID from `get_applications` |
+| `provider` | No | Supported provider (`yaxunit` only in this rollout) |
+
+**Returns:** stable `sessionId`, lifecycle `state`, target identity, reuse scope, and provider correlation such as RPC transport/port and Enterprise process id.
+
+**`get_test_session_status`** - Return current state for a persistent unit-test session by `sessionId`.
+
+**`recycle_test_session`** - Mark stale, terminate, or replace a persistent unit-test session by `sessionId`.
+
+Warm-session states are `starting`, `ready`, `busy`, `stale`, and `dead`. Stale reasons are explicit (`infobase_sync_performed`, `heartbeat_lost`, `explicit_recycle`, `provider_error`, etc.) so clients can decide whether to retry, recycle, or use cold launch.
 
 #### Get Test Run Report Tool
 
