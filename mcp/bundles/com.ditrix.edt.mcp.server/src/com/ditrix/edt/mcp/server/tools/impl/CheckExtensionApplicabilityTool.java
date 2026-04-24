@@ -14,6 +14,7 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.utils.ExtensionLifecycleFailure;
 import com.ditrix.edt.mcp.server.utils.ExtensionRuntimeContextResolver;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
@@ -35,7 +36,18 @@ public class CheckExtensionApplicabilityTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Return the current headless-safe status of extension applicability checks for a selected infobase target."; //$NON-NLS-1$
+        return "Capability: extension lifecycle guardrail. Return headless-safe applicability status for a selected target; this is fail-closed and does not replace apply_extension_to_infobase."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Check extension applicability guardrail") //$NON-NLS-1$
+                .readOnlyHint(true)
+                .destructiveHint(false)
+                .idempotentHint(true)
+                .openWorldHint(true)
+                .build();
     }
 
     @Override

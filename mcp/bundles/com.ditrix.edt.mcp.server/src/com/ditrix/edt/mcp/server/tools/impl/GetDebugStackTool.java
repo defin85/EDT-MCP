@@ -11,6 +11,7 @@ import java.util.Map;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.tools.debug.RuntimeDebugModelBridge;
 
 /**
@@ -29,7 +30,13 @@ public class GetDebugStackTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Get stack frames for a suspended thread in a supported EDT runtime debug session."; //$NON-NLS-1$
+        return "Capability: runtime debug control. Get stack frames for a suspended threadId; returns frameId values for get_debug_variables."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.readOnly("Read runtime debug stack"); //$NON-NLS-1$
     }
 
     @Override

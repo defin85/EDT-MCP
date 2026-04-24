@@ -21,6 +21,7 @@ import com.ditrix.edt.mcp.server.testruns.UnitTestSessionStaleReason;
 import com.ditrix.edt.mcp.server.testruns.UnitTestSessionState;
 import com.ditrix.edt.mcp.server.testruns.UnitTestSessionToolContract;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 
 /**
  * Controlled invalidation or provider-backed recycle for persistent unit-test sessions.
@@ -38,7 +39,17 @@ public class RecycleTestSessionTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Recycle or invalidate a persistent unit-test session by stable sessionId."; //$NON-NLS-1$
+        return "Capability: YAxUnit runtime testing. Recycle or invalidate a persistent warm session by sessionId before later reuse."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Recycle YAxUnit warm session") //$NON-NLS-1$
+                .readOnlyHint(false)
+                .destructiveHint(true)
+                .openWorldHint(true)
+                .build();
     }
 
     @Override

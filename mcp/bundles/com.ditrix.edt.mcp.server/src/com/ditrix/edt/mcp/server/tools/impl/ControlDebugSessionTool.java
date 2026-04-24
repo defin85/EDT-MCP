@@ -12,6 +12,7 @@ import java.util.Map;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.tools.debug.RuntimeDebugModelBridge;
 
 /**
@@ -33,7 +34,17 @@ public class ControlDebugSessionTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Dispatch a basic control action for a supported EDT runtime debug session or thread."; //$NON-NLS-1$
+        return "Capability: runtime debug control. Resume, suspend, step, or terminate a session/thread returned by list_debug_sessions."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Control runtime debug session") //$NON-NLS-1$
+                .readOnlyHint(false)
+                .destructiveHint(true)
+                .openWorldHint(true)
+                .build();
     }
 
     @Override

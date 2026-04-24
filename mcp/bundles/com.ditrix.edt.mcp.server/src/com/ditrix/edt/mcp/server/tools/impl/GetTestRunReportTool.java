@@ -17,6 +17,7 @@ import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.testruns.UnitTestRunRecord;
 import com.ditrix.edt.mcp.server.testruns.UnitTestRunStore;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 
 /**
  * Read-only lookup surface for retained unit-test run reports.
@@ -34,7 +35,13 @@ public class GetTestRunReportTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Get retained summary or report payload for a completed unit-test run by stable runId."; //$NON-NLS-1$
+        return "Capability: YAxUnit runtime testing. Get retained summary, manifest, or JUnit payload for a completed runId."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.readOnly("Read YAxUnit run report"); //$NON-NLS-1$
     }
 
     @Override

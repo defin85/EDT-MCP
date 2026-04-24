@@ -27,6 +27,7 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.utils.ExtensionLifecycleFailure;
 import com.ditrix.edt.mcp.server.utils.ExtensionRuntimeBridgeSupport;
 import com.ditrix.edt.mcp.server.utils.ExtensionRuntimeContextResolver;
@@ -55,7 +56,18 @@ public class ProbeExtensionXmlContractTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Developer-oriented live probe: export the selected extension from an infobase target and compare the exported XML layout with the workspace src tree."; //$NON-NLS-1$
+        return "Developer-oriented extension lifecycle probe: export the selected extension and compare EDT XML layout with workspace src; diagnostic only, does not apply the extension."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Probe extension XML contract") //$NON-NLS-1$
+                .readOnlyHint(true)
+                .destructiveHint(false)
+                .idempotentHint(true)
+                .openWorldHint(true)
+                .build();
     }
 
     @Override

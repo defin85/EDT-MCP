@@ -29,6 +29,7 @@ import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tasks.TaskCancellationToken;
 import com.ditrix.edt.mcp.server.tasks.TaskSchedulingKey;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.utils.BlockingOperationDiagnostics;
 import com.ditrix.edt.mcp.server.utils.ExtensionLifecycleFailure;
 import com.ditrix.edt.mcp.server.utils.ExtensionRuntimeBridgeSupport;
@@ -63,7 +64,17 @@ public class ApplyExtensionToInfobaseTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Apply an extension project to a selected infobase target. Async-first at runtime: bare calls auto-promote into task-backed execution, and the final result is retrieved via tasks/result in the same MCP session."; //$NON-NLS-1$
+        return "Capability: extension lifecycle mutation. Apply/synchronize an extension project to an applicationId from get_extension_runtime_targets; async-first with final payload via tasks/result in the same MCP session."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Apply extension to infobase") //$NON-NLS-1$
+                .readOnlyHint(false)
+                .destructiveHint(true)
+                .openWorldHint(true)
+                .build();
     }
 
     @Override

@@ -43,11 +43,17 @@ public class InitializeResult
     public static class Capabilities
     {
         private Tools tools = new Tools();
+        private Resources resources = new Resources();
         private Tasks tasks = new Tasks();
         
         public Tools getTools()
         {
             return tools;
+        }
+
+        public Resources getResources()
+        {
+            return resources;
         }
 
         public Tasks getTasks()
@@ -62,6 +68,14 @@ public class InitializeResult
     public static class Tools
     {
         // Empty - just signals that tools are supported
+    }
+
+    /**
+     * Resources capability (empty object signals static resources/list and resources/read support).
+     */
+    public static class Resources
+    {
+        // Empty - do not advertise subscribe/listChanged until implemented
     }
 
     /**

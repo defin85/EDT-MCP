@@ -42,6 +42,7 @@ import com.ditrix.edt.mcp.server.testruns.UnitTestRunRecord;
 import com.ditrix.edt.mcp.server.testruns.UnitTestRunStore;
 import com.ditrix.edt.mcp.server.testruns.YaxUnitRuntimeAdapter;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.utils.ConfigurationRuntimeBridgeSupport;
 import com.ditrix.edt.mcp.server.utils.ConfigurationRuntimeContextResolver;
 import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
@@ -77,9 +78,18 @@ public class RunUnitTestsTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Run YAxUnit-backed unit tests for a configuration project and application target. " //$NON-NLS-1$
-                + "Async-first at runtime: bare calls auto-promote into task-backed execution, " //$NON-NLS-1$
-                + "and final report retrieval is available via get_test_run_report."; //$NON-NLS-1$
+        return "Capability: YAxUnit runtime testing. Run tests cold or through a prepared warm session; " //$NON-NLS-1$
+                + "use tasks/result for async completion and get_test_run_report for retained runId reports."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Run YAxUnit unit tests") //$NON-NLS-1$
+                .readOnlyHint(false)
+                .destructiveHint(false)
+                .openWorldHint(true)
+                .build();
     }
 
     @Override

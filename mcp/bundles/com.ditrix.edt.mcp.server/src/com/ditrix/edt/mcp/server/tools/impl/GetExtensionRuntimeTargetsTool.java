@@ -19,6 +19,7 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.utils.ExtensionLifecycleFailure;
 import com.ditrix.edt.mcp.server.utils.ExtensionRuntimeContextResolver;
 import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
@@ -47,7 +48,18 @@ public class GetExtensionRuntimeTargetsTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Resolve parent configuration project and available infobase applications for an extension project."; //$NON-NLS-1$
+        return "Capability: extension lifecycle discovery. Resolve parent configuration project and applicationId values required by list_infobase_extensions, check_extension_applicability, apply_extension_to_infobase, and extension probes."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Resolve extension runtime targets") //$NON-NLS-1$
+                .readOnlyHint(true)
+                .destructiveHint(false)
+                .idempotentHint(true)
+                .openWorldHint(true)
+                .build();
     }
 
     @Override

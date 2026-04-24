@@ -370,13 +370,13 @@ Add to `claude_desktop_config.json`:
 | `add_metadata_attribute` | Add a new attribute to a metadata object (Catalog, Document, Register, etc.); extension write/refactor remains guarded |
 | `get_tags` | Get list of all tags defined in the project with descriptions and object counts |
 | `get_objects_by_tags` | Get metadata objects filtered by tags with tag descriptions and object FQNs |
-| `get_extension_properties` | Get extension-project root properties through the extension-aware EDT project model |
-| `get_extension_runtime_targets` | Resolve parent configuration project and available infobase applications for an extension project |
-| `list_infobase_extensions` | List configuration extensions installed in a selected infobase target for an extension project |
-| `check_extension_applicability` | Check whether the selected infobase target can apply the workspace extension |
-| `apply_extension_to_infobase` | Apply an extension project to a selected infobase target via the dedicated extension lifecycle flow; async-first at runtime |
-| `probe_extension_sync_bridge` | Developer-oriented probe: invoke the internal EDT synchronization bridge for an extension project on a selected target |
-| `probe_extension_xml_contract` | Developer-oriented probe: compare the workspace `src` tree with EDT XML export layout for a selected extension target |
+| `get_extension_properties` | Extension lifecycle discovery: read extension-project root properties; use `get_extension_runtime_targets` next when a target is needed |
+| `get_extension_runtime_targets` | Extension lifecycle discovery: resolve parent configuration project and `applicationId` values for inspect/apply/probe tools |
+| `list_infobase_extensions` | Extension lifecycle discovery: list installed extensions in the selected target before applying or diagnosing |
+| `check_extension_applicability` | Extension lifecycle guardrail: return headless-safe applicability status; fail-closed and not the apply backend |
+| `apply_extension_to_infobase` | Extension lifecycle mutation: synchronize an extension project to a selected `applicationId`; async-first with final result via `tasks/result` |
+| `probe_extension_sync_bridge` | Developer-oriented extension probe: invoke the internal EDT synchronization bridge used by apply for diagnostics/proof |
+| `probe_extension_xml_contract` | Developer-oriented extension probe: compare exported EDT XML layout with workspace `src`; diagnostic only |
 | `get_applications` | Get list of applications (infobases) for a project with update state; configuration-only in this rollout |
 | `update_database` | Update database (infobase) with full or incremental update mode; async-first at runtime, explicit task augmentation, and configuration-only extension rejection |
 | `run_unit_tests` | Run `YAxUnit`-backed unit tests for a configuration project/application target; async-first at runtime with retained `runId` results and optional warm-session reuse |
@@ -405,6 +405,26 @@ Add to `claude_desktop_config.json`:
 | `go_to_definition` | Navigate to symbol definition (method by name, metadata object by FQN) |
 | `get_symbol_info` | Get type/hover info about a symbol at a BSL code position (inferred types, signatures, docs) |
 | `validate_query` | Validate 1C query text in project context (syntax + semantic errors, optional DCS mode) |
+
+## MCP Discovery Resources
+
+`initialize` advertises the MCP `resources` capability. The server exposes static markdown resources
+through `resources/list` and `resources/read` so agents can discover multi-tool workflows without
+bloating `tools/list` descriptions.
+
+Initial resources:
+
+- `edt-mcp://capabilities/yaxunit-runtime-testing`
+- `edt-mcp://capabilities/runtime-debug-control`
+- `edt-mcp://workflows/yaxunit-warm-session`
+- `edt-mcp://workflows/runtime-debug-breakpoint`
+- `edt-mcp://capabilities/extension-lifecycle`
+- `edt-mcp://workflows/extension-apply`
+- `edt-mcp://limitations/runtime-testing-and-debug`
+
+These resources are guidance only. Live state for tasks, warm sessions, retained reports, debug
+sessions, frames, variables, and breakpoints remains authoritative through the corresponding tools.
+Unknown resource URIs fail closed with JSON-RPC error `-32002` and the requested URI in `error.data`.
 
 ## Project Kinds And Extension Support
 
@@ -1222,6 +1242,7 @@ curl -sS -H 'Content-Type: application/json' \
 ### Output Formats
 
 - **Markdown tools**: return Markdown as EmbeddedResource with `mimeType: text/markdown`; selected tools can additionally attach additive `structuredContent` for deterministic discovery or stable failure categories (`list_projects` is the primary discovery example)
+- **MCP resources**: `resources/list` and `resources/read` expose static markdown capability/workflow resources; these are separate from tool-call EmbeddedResource payloads and never expose live runtime state
 - **JSON tools**: `get_server_build_info`, `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects`, `run_unit_tests`, `get_test_run_report` - return JSON with `structuredContent`
 - **Text tools**: `get_edt_version` - return plain text
 
@@ -1231,7 +1252,7 @@ curl -sS -H 'Content-Type: application/json' \
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/mcp` | POST | MCP JSON-RPC (`initialize`, `tools/list`, `tools/call`, `tasks/get`, `tasks/list`, `tasks/result`, `tasks/cancel`) |
+| `/mcp` | POST | MCP JSON-RPC (`initialize`, `tools/list`, `tools/call`, `resources/list`, `resources/read`, `tasks/get`, `tasks/list`, `tasks/result`, `tasks/cancel`) |
 | `/mcp` | GET | Server info |
 | `/health` | GET | Health check |
 

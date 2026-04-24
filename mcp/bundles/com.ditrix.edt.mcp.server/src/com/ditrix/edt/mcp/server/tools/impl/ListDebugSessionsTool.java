@@ -11,6 +11,7 @@ import java.util.Map;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.tools.debug.RuntimeDebugModelBridge;
 
 /**
@@ -29,7 +30,13 @@ public class ListDebugSessionsTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "List active supported EDT runtime debug sessions and thread summaries."; //$NON-NLS-1$
+        return "Capability: runtime debug control. List active supported EDT debug sessions; returns sessionId/threadId for stack, variables, and control."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.readOnly("List runtime debug sessions"); //$NON-NLS-1$
     }
 
     @Override

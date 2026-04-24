@@ -15,6 +15,7 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.utils.ConfigurationPropertiesSupport;
 import com.ditrix.edt.mcp.server.utils.ExtensionRuntimeContextResolver;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
@@ -36,7 +37,13 @@ public class GetExtensionPropertiesTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Get extension project properties using the extension-aware EDT project model."; //$NON-NLS-1$
+        return "Capability: extension lifecycle discovery. Read extension-project properties; use get_extension_runtime_targets next when an infobase target is needed."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.readOnly("Read extension project properties"); //$NON-NLS-1$
     }
 
     @Override

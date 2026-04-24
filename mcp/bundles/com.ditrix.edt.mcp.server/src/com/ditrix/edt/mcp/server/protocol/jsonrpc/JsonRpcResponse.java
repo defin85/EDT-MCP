@@ -41,6 +41,17 @@ public class JsonRpcResponse
         response.error = new JsonRpcError(code, message);
         return response;
     }
+
+    /**
+     * Creates an error response with additional error data.
+     */
+    public static JsonRpcResponse error(Object id, int code, String message, Object data)
+    {
+        JsonRpcResponse response = new JsonRpcResponse();
+        response.id = id;
+        response.error = new JsonRpcError(code, message, data);
+        return response;
+    }
     
     public String getJsonrpc()
     {

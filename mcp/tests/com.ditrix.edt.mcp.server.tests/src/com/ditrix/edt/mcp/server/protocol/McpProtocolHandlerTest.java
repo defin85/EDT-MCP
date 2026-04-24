@@ -24,6 +24,7 @@ import com.ditrix.edt.mcp.server.progress.OperationProgressReporter;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.tools.IMcpTool.TaskSupport;
 import com.ditrix.edt.mcp.server.tools.McpToolRegistry;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.tools.impl.ApplyExtensionToInfobaseTool;
 import com.ditrix.edt.mcp.server.tools.impl.CleanProjectTool;
 import com.ditrix.edt.mcp.server.tools.impl.DebugLaunchTool;
@@ -91,6 +92,11 @@ public class McpProtocolHandlerTest
         assertNotNull("Should have serverInfo", result.get("serverInfo"));
         assertNotNull("Should advertise tasks capability",
             result.getAsJsonObject("capabilities").getAsJsonObject("tasks"));
+        assertNotNull("Should advertise resources capability",
+            result.getAsJsonObject("capabilities").getAsJsonObject("resources"));
+        JsonObject resources = result.getAsJsonObject("capabilities").getAsJsonObject("resources");
+        assertFalse("Static resource rollout must not advertise subscriptions", resources.has("subscribe")); //$NON-NLS-1$
+        assertFalse("Static resource rollout must not advertise listChanged", resources.has("listChanged")); //$NON-NLS-1$
 
         JsonObject serverInfo = result.getAsJsonObject("serverInfo");
         assertNotNull(serverInfo.get("name"));
@@ -183,7 +189,8 @@ public class McpProtocolHandlerTest
     @Test
     public void testToolsListWithTools()
     {
-        registry.register(new StubTool("tool_alpha", "Alpha tool", "{\"type\":\"object\"}", TaskSupport.FORBIDDEN));
+        registry.register(new StubTool("tool_alpha", "Alpha tool", "{\"type\":\"object\"}", TaskSupport.FORBIDDEN,
+                "{}", ToolAnnotations.readOnly("Alpha title"))); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
         registry.register(new StubTool("tool_beta", "Beta tool",
             "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}", TaskSupport.OPTIONAL));
 
@@ -204,7 +211,100 @@ public class McpProtocolHandlerTest
             assertNotNull("Tool should advertise task execution metadata", tool.getAsJsonObject("execution"));
             assertNotNull("Tool should advertise task support",
                 tool.getAsJsonObject("execution").get("taskSupport"));
+            if ("tool_alpha".equals(tool.get("name").getAsString()))
+            {
+                JsonObject annotations = tool.getAsJsonObject("annotations");
+                assertNotNull("Annotated tool should expose annotations", annotations);
+                assertEquals("Alpha title", annotations.get("title").getAsString());
+                assertTrue(annotations.get("readOnlyHint").getAsBoolean());
+                assertFalse(annotations.get("destructiveHint").getAsBoolean());
+                assertTrue(annotations.get("idempotentHint").getAsBoolean());
+                assertFalse(annotations.get("openWorldHint").getAsBoolean());
+            }
+            if ("tool_beta".equals(tool.get("name").getAsString()))
+            {
+                assertFalse("Unannotated tool should omit annotations", tool.has("annotations"));
+            }
         }
+    }
+
+    @Test
+    public void testResourcesListReturnsStaticCapabilityResources()
+    {
+        String request = buildJsonRpcRequest(1, McpConstants.METHOD_RESOURCES_LIST, null);
+        String response = handler.processRequest(request);
+
+        JsonObject json = parseResponse(response);
+        JsonObject result = json.getAsJsonObject("result");
+        assertNotNull(result.get("resources"));
+        assertFalse("Static resource list should fit in one page", result.has("nextCursor"));
+
+        java.util.Set<String> uris = new java.util.HashSet<>();
+        for (JsonElement resourceEl : result.getAsJsonArray("resources"))
+        {
+            JsonObject resource = resourceEl.getAsJsonObject();
+            assertNotNull(resource.get("uri"));
+            assertNotNull(resource.get("name"));
+            assertNotNull(resource.get("description"));
+            assertEquals("text/markdown", resource.get("mimeType").getAsString());
+            uris.add(resource.get("uri").getAsString());
+        }
+
+        assertTrue(uris.contains("edt-mcp://capabilities/yaxunit-runtime-testing"));
+        assertTrue(uris.contains("edt-mcp://capabilities/runtime-debug-control"));
+        assertTrue(uris.contains("edt-mcp://workflows/yaxunit-warm-session"));
+        assertTrue(uris.contains("edt-mcp://workflows/runtime-debug-breakpoint"));
+        assertTrue(uris.contains("edt-mcp://capabilities/extension-lifecycle"));
+        assertTrue(uris.contains("edt-mcp://workflows/extension-apply"));
+    }
+
+    @Test
+    public void testResourcesReadReturnsTextContentsForExactUri()
+    {
+        String request = buildJsonRpcRequest(1, McpConstants.METHOD_RESOURCES_READ,
+                "{\"uri\":\"edt-mcp://workflows/runtime-debug-breakpoint\"}"); //$NON-NLS-1$
+        String response = handler.processRequest(request);
+
+        JsonObject json = parseResponse(response);
+        JsonObject result = json.getAsJsonObject("result");
+        JsonObject content = result.getAsJsonArray("contents").get(0).getAsJsonObject();
+        assertEquals("edt-mcp://workflows/runtime-debug-breakpoint", content.get("uri").getAsString());
+        assertEquals("text/markdown", content.get("mimeType").getAsString());
+        assertTrue(content.get("text").getAsString().contains("set_debug_breakpoint"));
+        assertTrue(content.get("text").getAsString().contains("remove_debug_breakpoint"));
+    }
+
+    @Test
+    public void testResourcesReadReturnsExtensionLifecycleWorkflow()
+    {
+        String request = buildJsonRpcRequest(1, McpConstants.METHOD_RESOURCES_READ,
+                "{\"uri\":\"edt-mcp://workflows/extension-apply\"}"); //$NON-NLS-1$
+        String response = handler.processRequest(request);
+
+        JsonObject json = parseResponse(response);
+        JsonObject result = json.getAsJsonObject("result");
+        JsonObject content = result.getAsJsonArray("contents").get(0).getAsJsonObject();
+        assertEquals("edt-mcp://workflows/extension-apply", content.get("uri").getAsString());
+        assertEquals("text/markdown", content.get("mimeType").getAsString());
+        assertTrue(content.get("text").getAsString().contains("get_extension_runtime_targets"));
+        assertTrue(content.get("text").getAsString().contains("apply_extension_to_infobase"));
+        assertTrue(content.get("text").getAsString().contains("tasks/result"));
+    }
+
+    @Test
+    public void testResourcesReadUnknownUriReturnsResourceNotFoundError()
+    {
+        String request = buildJsonRpcRequest(1, McpConstants.METHOD_RESOURCES_READ,
+                "{\"uri\":\"edt-mcp://workflows/runtime-debug-breakpoint/../other\"}"); //$NON-NLS-1$
+        String response = handler.processRequest(request);
+
+        JsonObject json = parseResponse(response);
+        JsonObject error = json.getAsJsonObject("error");
+        assertNotNull(error);
+        assertEquals(McpConstants.ERROR_RESOURCE_NOT_FOUND, error.get("code").getAsInt());
+        assertEquals("Resource not found", error.get("message").getAsString());
+        assertEquals("edt-mcp://workflows/runtime-debug-breakpoint/../other",
+                error.getAsJsonObject("data").get("uri").getAsString());
     }
 
     @Test
@@ -749,6 +849,7 @@ public class McpProtocolHandlerTest
         private final String inputSchema;
         private final TaskSupport taskSupport;
         private final String executeResult;
+        private final ToolAnnotations annotations;
 
         StubTool(String name, String description, String inputSchema, TaskSupport taskSupport)
         {
@@ -757,11 +858,18 @@ public class McpProtocolHandlerTest
 
         StubTool(String name, String description, String inputSchema, TaskSupport taskSupport, String executeResult)
         {
+            this(name, description, inputSchema, taskSupport, executeResult, null);
+        }
+
+        StubTool(String name, String description, String inputSchema, TaskSupport taskSupport, String executeResult,
+                ToolAnnotations annotations)
+        {
             this.name = name;
             this.description = description;
             this.inputSchema = inputSchema;
             this.taskSupport = taskSupport;
             this.executeResult = executeResult;
+            this.annotations = annotations;
         }
 
         @Override
@@ -775,6 +883,9 @@ public class McpProtocolHandlerTest
 
         @Override
         public TaskSupport getTaskSupport() { return taskSupport; }
+
+        @Override
+        public ToolAnnotations getAnnotations() { return annotations; }
 
         @Override
         public String execute(Map<String, String> params) { return executeResult; }

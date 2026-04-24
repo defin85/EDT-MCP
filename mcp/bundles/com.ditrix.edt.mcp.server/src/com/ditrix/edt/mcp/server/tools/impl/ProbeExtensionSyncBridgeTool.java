@@ -19,6 +19,7 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.utils.ExtensionLifecycleFailure;
 import com.ditrix.edt.mcp.server.utils.ExtensionRuntimeBridgeSupport;
 import com.ditrix.edt.mcp.server.utils.ExtensionRuntimeContextResolver;
@@ -47,7 +48,17 @@ public class ProbeExtensionSyncBridgeTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Developer-oriented live probe: invoke the internal EDT infobase synchronization bridge for an extension project on a selected target."; //$NON-NLS-1$
+        return "Developer-oriented extension lifecycle probe: invoke the same internal EDT synchronization bridge used by apply_extension_to_infobase; use for diagnostics/proof, not normal automation."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Probe extension sync bridge") //$NON-NLS-1$
+                .readOnlyHint(false)
+                .destructiveHint(true)
+                .openWorldHint(true)
+                .build();
     }
 
     @Override

@@ -11,6 +11,10 @@ TOOLS_DIR = ROOT / "mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp
 TESTS_DIR = ROOT / "mcp/tests/com.ditrix.edt.mcp.server.tests/src"
 README = ROOT / "README.md"
 OUTPUT = ROOT / "docs/agent/generated-tool-catalog.md"
+RESOURCE_REGISTRY = ROOT / (
+    "mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/resources/"
+    "McpResourceRegistry.java"
+)
 
 LONG_RUNNING_TOOLS = {
     "clean_project",
@@ -29,10 +33,19 @@ def camel_to_snake(name: str) -> str:
 def discover_tools() -> list[dict[str, str]]:
     tools: list[dict[str, str]] = []
     for path in sorted(TOOLS_DIR.glob("*Tool.java")):
+        source = path.read_text(encoding="utf-8")
         class_name = path.stem
         tool_name = camel_to_snake(class_name.removesuffix("Tool"))
         tests = sorted(TESTS_DIR.rglob(f"{class_name}Test.java"))
         test_ref = ", ".join(str(p.relative_to(ROOT)) for p in tests) if tests else "-"
+        annotation = "-"
+        if "getAnnotations()" in source:
+            title_match = re.search(r"ToolAnnotations\.readOnly\(\s*\"([^\"]+)\"", source)
+            if not title_match:
+                title_match = re.search(r"ToolAnnotations\.builder\(\s*\"([^\"]+)\"", source)
+            if not title_match:
+                title_match = re.search(r"\.title\(\s*\"([^\"]+)\"", source)
+            annotation = f"`{title_match.group(1)}`" if title_match else "yes"
         if tool_name in LONG_RUNNING_TOOLS:
             zone = "long-running-runtime"
             notes = "`docs/agent/long-running-ops.md`"
@@ -56,9 +69,32 @@ def discover_tools() -> list[dict[str, str]]:
                 "tests": test_ref,
                 "zone": zone,
                 "notes": notes,
+                "annotation": annotation,
             }
         )
     return tools
+
+
+def discover_resources() -> list[dict[str, str]]:
+    if not RESOURCE_REGISTRY.exists():
+        return []
+
+    source = RESOURCE_REGISTRY.read_text(encoding="utf-8")
+    resources: list[dict[str, str]] = []
+    for match in re.finditer(r"register\(new McpResource\((.*?)\)\);", source, re.DOTALL):
+        values = re.findall(r'"([^"]*)"', match.group(1))
+        if len(values) < 4:
+            continue
+        resources.append(
+            {
+                "uri": values[0],
+                "name": values[1],
+                "title": values[2],
+                "description": values[3],
+                "mime_type": "text/markdown",
+            }
+        )
+    return resources
 
 
 def parse_readme_tool_names() -> list[str]:
@@ -78,19 +114,22 @@ def parse_readme_tool_names() -> list[str]:
     return names
 
 
-def render_markdown(tools: list[dict[str, str]], readme_names: list[str]) -> str:
+def render_markdown(tools: list[dict[str, str]], readme_names: list[str], resources: list[dict[str, str]]) -> str:
     code_names = [tool["tool_name"] for tool in tools]
     missing_in_readme = sorted(set(code_names) - set(readme_names))
     missing_in_code = sorted(set(readme_names) - set(code_names))
+    annotated_tools = [tool for tool in tools if tool["annotation"] != "-"]
 
     lines = [
         "<!-- GENERATED FILE: do not edit manually. Run `python3 scripts/generate_agent_refs.py`. -->",
         "# Generated Tool Catalog",
         "",
-        "Этот файл генерируется из `tools/impl/*Tool.java` и служит fast reference для Codex.",
+        "Этот файл генерируется из `tools/impl/*Tool.java` и `McpResourceRegistry.java` и служит fast reference для Codex.",
         "",
         f"- Tool implementations found: `{len(code_names)}`",
         f"- Tool names documented in `README.md`: `{len(readme_names)}`",
+        f"- Tools with discovery annotations: `{len(annotated_tools)}`",
+        f"- Static MCP resources found: `{len(resources)}`",
         f"- Drift status: `missing_in_readme={len(missing_in_readme)}`, `missing_in_code={len(missing_in_code)}`",
         "",
         "## Tool Map",
@@ -102,6 +141,40 @@ def render_markdown(tools: list[dict[str, str]], readme_names: list[str]) -> str
         lines.append(
             f"| `{tool['tool_name']}` | `{tool['impl_path']}` | `{tool['tests']}` | `{tool['zone']}` | {tool['notes']} |"
         )
+
+    lines.extend(
+        [
+            "",
+            "## Tool Discovery Metadata",
+            "",
+            "`tools/list` may include MCP `annotations` for tools with conservative safety metadata.",
+            "",
+            "| Tool | Annotation title |",
+            "|------|------------------|",
+        ]
+    )
+    for tool in annotated_tools:
+        lines.append(f"| `{tool['tool_name']}` | {tool['annotation']} |")
+    if not annotated_tools:
+        lines.append("| - | - |")
+
+    lines.extend(
+        [
+            "",
+            "## MCP Resource Map",
+            "",
+            "Static resources are exposed through `resources/list` and `resources/read`; live runtime state stays tool-owned.",
+            "",
+            "| URI | Name | MIME type | Description |",
+            "|-----|------|-----------|-------------|",
+        ]
+    )
+    for resource in resources:
+        lines.append(
+            f"| `{resource['uri']}` | `{resource['name']}` | `{resource['mime_type']}` | {resource['description']} |"
+        )
+    if not resources:
+        lines.append("| - | - | - | - |")
 
     lines.extend(
         [
@@ -128,7 +201,8 @@ def main() -> int:
 
     tools = discover_tools()
     readme_names = parse_readme_tool_names()
-    rendered = render_markdown(tools, readme_names)
+    resources = discover_resources()
+    rendered = render_markdown(tools, readme_names, resources)
     missing_in_readme = sorted(set(tool["tool_name"] for tool in tools) - set(readme_names))
     missing_in_code = sorted(set(readme_names) - set(tool["tool_name"] for tool in tools))
 

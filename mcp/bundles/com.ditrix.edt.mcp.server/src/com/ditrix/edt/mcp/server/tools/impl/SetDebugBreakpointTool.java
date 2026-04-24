@@ -11,6 +11,7 @@ import java.util.Map;
 import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.tools.debug.RuntimeDebugBreakpointBridge;
 
 /**
@@ -29,7 +30,18 @@ public class SetDebugBreakpointTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Set a supported EDT BSL line breakpoint by project, module path, and 1-based line number."; //$NON-NLS-1$
+        return "Capability: runtime debug control. Create or reuse an MCP-owned BSL line breakpoint; returns breakpointId for list/remove and debug launch flow."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Set BSL debug breakpoint") //$NON-NLS-1$
+                .readOnlyHint(false)
+                .destructiveHint(false)
+                .idempotentHint(true)
+                .openWorldHint(false)
+                .build();
     }
 
     @Override

@@ -25,6 +25,7 @@ import com.ditrix.edt.mcp.server.testruns.UnitTestSessionTarget;
 import com.ditrix.edt.mcp.server.testruns.UnitTestSessionToolContract;
 import com.ditrix.edt.mcp.server.testruns.YaxUnitRuntimeAdapter;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 
 /**
  * Explicit warm-up or attach surface for persistent unit-test sessions.
@@ -42,7 +43,18 @@ public class PrepareTestSessionTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Prepare or attach a persistent unit-test session for a supported target."; //$NON-NLS-1$
+        return "Capability: YAxUnit runtime testing. Prepare or attach a persistent warm session; " //$NON-NLS-1$
+                + "returns sessionId for get_test_session_status, recycle_test_session, and warm run_unit_tests."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Prepare YAxUnit warm session") //$NON-NLS-1$
+                .readOnlyHint(false)
+                .destructiveHint(false)
+                .openWorldHint(true)
+                .build();
     }
 
     @Override

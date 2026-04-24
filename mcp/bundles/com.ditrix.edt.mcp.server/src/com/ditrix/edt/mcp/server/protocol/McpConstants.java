@@ -56,6 +56,9 @@ public final class McpConstants
     
     /** Internal error */
     public static final int ERROR_INTERNAL = -32603;
+
+    /** MCP resource not found error */
+    public static final int ERROR_RESOURCE_NOT_FOUND = -32002;
     
     // HTTP Headers
     /** MCP Protocol Version header */
@@ -82,6 +85,12 @@ public final class McpConstants
     
     /** Tools call method */
     public static final String METHOD_TOOLS_CALL = "tools/call"; //$NON-NLS-1$
+
+    /** Resources list method */
+    public static final String METHOD_RESOURCES_LIST = "resources/list"; //$NON-NLS-1$
+
+    /** Resources read method */
+    public static final String METHOD_RESOURCES_READ = "resources/read"; //$NON-NLS-1$
 
     /** Tasks get method */
     public static final String METHOD_TASKS_GET = "tasks/get"; //$NON-NLS-1$

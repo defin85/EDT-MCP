@@ -128,6 +128,16 @@ public interface IMcpTool
     {
         return TaskSchedulingKey.none();
     }
+
+    /**
+     * Returns optional MCP tool annotations for discovery.
+     *
+     * @return tool annotations or {@code null} when no reliable annotations are available
+     */
+    default ToolAnnotations getAnnotations()
+    {
+        return null;
+    }
     
     /**
      * Returns the result file name for EmbeddedResource URI.

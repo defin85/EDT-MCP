@@ -16,6 +16,7 @@ import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.testruns.UnitTestSessionSnapshot;
 import com.ditrix.edt.mcp.server.testruns.UnitTestSessionToolContract;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 
 /**
  * Read-only inspection for persistent unit-test session state.
@@ -33,7 +34,13 @@ public class GetTestSessionStatusTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Inspect persistent unit-test session lifecycle state by stable sessionId."; //$NON-NLS-1$
+        return "Capability: YAxUnit runtime testing. Inspect warm-session lifecycle state by sessionId before reuse or recycle."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.readOnly("Inspect YAxUnit session status"); //$NON-NLS-1$
     }
 
     @Override

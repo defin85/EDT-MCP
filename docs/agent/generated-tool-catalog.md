@@ -1,10 +1,12 @@
 <!-- GENERATED FILE: do not edit manually. Run `python3 scripts/generate_agent_refs.py`. -->
 # Generated Tool Catalog
 
-Этот файл генерируется из `tools/impl/*Tool.java` и служит fast reference для Codex.
+Этот файл генерируется из `tools/impl/*Tool.java` и `McpResourceRegistry.java` и служит fast reference для Codex.
 
 - Tool implementations found: `56`
 - Tool names documented in `README.md`: `56`
+- Tools with discovery annotations: `20`
+- Static MCP resources found: `7`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
 ## Tool Map
@@ -67,6 +69,47 @@
 | `update_database` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/UpdateDatabaseTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `validate_query` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ValidateQueryTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/ValidateQueryToolTest.java` | `analysis/navigation` | - |
 | `write_module_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/WriteModuleSourceTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/WriteModuleSourceToolTest.java` | `mutation/refactoring` | - |
+
+## Tool Discovery Metadata
+
+`tools/list` may include MCP `annotations` for tools with conservative safety metadata.
+
+| Tool | Annotation title |
+|------|------------------|
+| `apply_extension_to_infobase` | `Apply extension to infobase` |
+| `check_extension_applicability` | `Check extension applicability guardrail` |
+| `control_debug_session` | `Control runtime debug session` |
+| `debug_launch` | `Launch EDT debug session` |
+| `get_debug_stack` | `Read runtime debug stack` |
+| `get_debug_variables` | `Read runtime debug variables` |
+| `get_extension_properties` | `Read extension project properties` |
+| `get_extension_runtime_targets` | `Resolve extension runtime targets` |
+| `get_test_run_report` | `Read YAxUnit run report` |
+| `get_test_session_status` | `Inspect YAxUnit session status` |
+| `list_debug_breakpoints` | `List BSL debug breakpoints` |
+| `list_debug_sessions` | `List runtime debug sessions` |
+| `list_infobase_extensions` | `List installed infobase extensions` |
+| `prepare_test_session` | `Prepare YAxUnit warm session` |
+| `probe_extension_sync_bridge` | `Probe extension sync bridge` |
+| `probe_extension_xml_contract` | `Probe extension XML contract` |
+| `recycle_test_session` | `Recycle YAxUnit warm session` |
+| `remove_debug_breakpoint` | `Remove BSL debug breakpoint` |
+| `run_unit_tests` | `Run YAxUnit unit tests` |
+| `set_debug_breakpoint` | `Set BSL debug breakpoint` |
+
+## MCP Resource Map
+
+Static resources are exposed through `resources/list` and `resources/read`; live runtime state stays tool-owned.
+
+| URI | Name | MIME type | Description |
+|-----|------|-----------|-------------|
+| `edt-mcp://capabilities/yaxunit-runtime-testing` | `yaxunit-runtime-testing` | `text/markdown` | YAxUnit cold and warm runtime testing workflow exposed by EDT-MCP. |
+| `edt-mcp://capabilities/runtime-debug-control` | `runtime-debug-control` | `text/markdown` | Runtime debug launch, session inspection, breakpoint, stack, variable, and control workflow. |
+| `edt-mcp://workflows/yaxunit-warm-session` | `yaxunit-warm-session-workflow` | `text/markdown` | Step-by-step warm-session reuse workflow for YAxUnit test runs. |
+| `edt-mcp://workflows/runtime-debug-breakpoint` | `runtime-debug-breakpoint-workflow` | `text/markdown` | Step-by-step MCP-owned BSL breakpoint workflow for runtime debug sessions. |
+| `edt-mcp://capabilities/extension-lifecycle` | `extension-lifecycle` | `text/markdown` | Extension discovery, installed-extension inspection, guarded applicability, apply, and diagnostic probe workflow. |
+| `edt-mcp://workflows/extension-apply` | `extension-apply-workflow` | `text/markdown` | Step-by-step workflow for applying an extension project to an infobase target. |
+| `edt-mcp://limitations/runtime-testing-and-debug` | `runtime-testing-and-debug-limitations` | `text/markdown` | Known scope limits for the YAxUnit and runtime debug discovery contours. |
 
 ## Drift Check
 

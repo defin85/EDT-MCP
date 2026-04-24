@@ -17,6 +17,7 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.utils.ExtensionLifecycleFailure;
 import com.ditrix.edt.mcp.server.utils.ExtensionRuntimeBridgeSupport;
 import com.ditrix.edt.mcp.server.utils.ExtensionRuntimeContextResolver;
@@ -41,7 +42,18 @@ public class ListInfobaseExtensionsTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "List configuration extensions installed in a selected infobase target for an extension project."; //$NON-NLS-1$
+        return "Capability: extension lifecycle discovery. List extensions installed in the selected target; use applicationId from get_extension_runtime_targets before apply_extension_to_infobase."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("List installed infobase extensions") //$NON-NLS-1$
+                .readOnlyHint(true)
+                .destructiveHint(false)
+                .idempotentHint(true)
+                .openWorldHint(true)
+                .build();
     }
 
     @Override

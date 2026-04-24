@@ -27,6 +27,10 @@ import com.ditrix.edt.mcp.server.protocol.jsonrpc.TaskInfo;
 import com.ditrix.edt.mcp.server.protocol.jsonrpc.ToolCallResult;
 import com.ditrix.edt.mcp.server.protocol.jsonrpc.TasksListResult;
 import com.ditrix.edt.mcp.server.protocol.jsonrpc.ToolsListResult;
+import com.ditrix.edt.mcp.server.protocol.jsonrpc.ResourcesListResult;
+import com.ditrix.edt.mcp.server.protocol.jsonrpc.ResourcesReadResult;
+import com.ditrix.edt.mcp.server.resources.McpResource;
+import com.ditrix.edt.mcp.server.resources.McpResourceRegistry;
 import com.ditrix.edt.mcp.server.tasks.TaskCancellationToken;
 import com.ditrix.edt.mcp.server.tasks.TaskExecutionHandle;
 import com.ditrix.edt.mcp.server.tasks.TaskRecord;
@@ -115,6 +119,16 @@ public class McpProtocolHandler
             if (McpConstants.METHOD_TOOLS_LIST.equals(method))
             {
                 return buildToolsListResponse(requestId);
+            }
+
+            if (McpConstants.METHOD_RESOURCES_LIST.equals(method))
+            {
+                return buildResourcesListResponse(requestId);
+            }
+
+            if (McpConstants.METHOD_RESOURCES_READ.equals(method))
+            {
+                return handleResourcesRead(request, requestId);
             }
 
             if (McpConstants.METHOD_TASKS_GET.equals(method))
@@ -383,10 +397,33 @@ public class McpProtocolHandler
         {
             // Parse inputSchema from JSON string to JsonElement
             JsonElement schema = JsonParser.parseString(tool.getInputSchema());
-            result.addTool(tool.getName(), tool.getDescription(), schema, tool.getTaskSupport().getWireValue());
+            result.addTool(tool.getName(), tool.getDescription(), schema, tool.getTaskSupport().getWireValue(),
+                    tool.getAnnotations());
         }
         
         return GsonProvider.toJson(JsonRpcResponse.success(requestId, result));
+    }
+
+    private String buildResourcesListResponse(Object requestId)
+    {
+        ResourcesListResult result = new ResourcesListResult();
+        for (McpResource resource : McpResourceRegistry.getInstance().getAllResources())
+        {
+            result.addResource(resource);
+        }
+        return GsonProvider.toJson(JsonRpcResponse.success(requestId, result));
+    }
+
+    private String handleResourcesRead(JsonRpcRequest request, Object requestId)
+    {
+        String uri = request != null ? request.getStringParam("uri") : null; //$NON-NLS-1$
+        McpResource resource = McpResourceRegistry.getInstance().getResource(uri);
+        if (resource == null)
+        {
+            return buildErrorResponse(McpConstants.ERROR_RESOURCE_NOT_FOUND, "Resource not found", requestId, //$NON-NLS-1$
+                    Map.of("uri", uri != null ? uri : "")); //$NON-NLS-1$ //$NON-NLS-2$
+        }
+        return GsonProvider.toJson(JsonRpcResponse.success(requestId, new ResourcesReadResult(resource)));
     }
 
     private String handleTaskGet(JsonRpcRequest request, Object requestId, String sessionId)
@@ -938,6 +975,11 @@ public class McpProtocolHandler
     private String buildErrorResponse(int code, String message, Object requestId)
     {
         return GsonProvider.toJson(JsonRpcResponse.error(requestId, code, message));
+    }
+
+    private String buildErrorResponse(int code, String message, Object requestId, Object data)
+    {
+        return GsonProvider.toJson(JsonRpcResponse.error(requestId, code, message, data));
     }
 
     private static final class ToolExecutionOutcome

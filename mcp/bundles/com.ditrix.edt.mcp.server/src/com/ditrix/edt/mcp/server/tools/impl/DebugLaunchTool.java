@@ -29,6 +29,7 @@ import com.ditrix.edt.mcp.server.protocol.JsonSchemaBuilder;
 import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
+import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
@@ -64,9 +65,18 @@ public class DebugLaunchTool implements IMcpTool
     @Override
     public String getDescription()
     {
-        return "Launch EDT application in debug mode. " + //$NON-NLS-1$
-               "Finds existing launch configuration for the project/application and starts debugging. " + //$NON-NLS-1$
-               "Requires application ID from get_applications tool."; //$NON-NLS-1$
+        return "Capability: runtime debug control. Launch an EDT application in debug mode; " //$NON-NLS-1$
+                + "use list_debug_sessions afterward to obtain sessionId and threadId."; //$NON-NLS-1$
+    }
+
+    @Override
+    public ToolAnnotations getAnnotations()
+    {
+        return ToolAnnotations.builder("Launch EDT debug session") //$NON-NLS-1$
+                .readOnlyHint(false)
+                .destructiveHint(false)
+                .openWorldHint(true)
+                .build();
     }
     
     @Override
