@@ -47,7 +47,7 @@ concrete child tasks `EDTMCP-868.1.1` through `EDTMCP-868.4.6` mirroring this ch
       `-32002` handling.
 - [x] 4.4 Run the smallest relevant Maven/Tycho test set for protocol discovery changes.
 - [x] 4.5 Run `openspec validate add-mcp-tool-discovery-resources --strict --no-interactive`.
-- [ ] 4.6 After reinstalling the built plugin, live-check `initialize`, `tools/list`,
+- [x] 4.6 After reinstalling the built plugin, live-check `initialize`, `tools/list`,
       `resources/list`, and
       `resources/read` against the running EDT MCP server.
 
@@ -59,4 +59,10 @@ Verification evidence:
 - `openspec validate add-mcp-tool-discovery-resources --strict --no-interactive` passed.
 - `mvn -f mcp/pom.xml verify -DskipTests --batch-mode --no-transfer-progress` passed and rebuilt `mcp/repositories/com.ditrix.edt.mcp.server.repository/local-update-site/` with bundle qualifier `202604241739`.
 - Full `mvn -f mcp/pom.xml verify --batch-mode --no-transfer-progress` currently fails outside this change on `YaxUnitRuntimeAdapterCompatibilityTest.testBuildConfigJsonUsesLegacyMinimalShape`; discovery protocol tests pass.
-- Live proof remains pending because the running installed plugin reports bundle qualifier `202604241333`, not the newly built `202604241739`.
+- Live proof on `http://172.24.192.1:8766/mcp` passed after reinstall: `get_server_build_info`
+  reports bundle `1.0.0.202604241739`; `initialize` advertises empty `resources` without
+  `subscribe`/`listChanged`; `tools/list` returns 56 tools and 20 annotated tools; `resources/list`
+  returns 7 static resources including extension/debug workflows; `resources/read` works for
+  `edt-mcp://workflows/extension-apply`; unknown resource URI returns `-32002`.
+- Note: `http://172.24.192.1:8765/mcp` is a separate older EDT process that reports bundle
+  `1.0.0.202604241112`; live proof for this change uses port `8766`.
