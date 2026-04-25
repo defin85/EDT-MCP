@@ -3,9 +3,9 @@
 
 Этот файл генерируется из `tools/impl/*Tool.java` и `McpResourceRegistry.java` и служит fast reference для Codex.
 
-- Tool implementations found: `56`
-- Tool names documented in `README.md`: `56`
-- Tools with discovery annotations: `20`
+- Tool implementations found: `59`
+- Tool names documented in `README.md`: `59`
+- Tools with discovery annotations: `23`
 - Static MCP resources found: `7`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
@@ -45,6 +45,7 @@
 | `get_server_build_info` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetServerBuildInfoTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetServerBuildInfoToolTest.java` | `read/discovery` | - |
 | `get_symbol_info` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetSymbolInfoTool.java` | `-` | `read/discovery` | - |
 | `get_tags` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTagsTool.java` | `-` | `read/discovery` | - |
+| `get_task_result` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTaskResultTool.java` | `-` | `read/discovery` | - |
 | `get_tasks` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTasksTool.java` | `-` | `read/discovery` | - |
 | `get_test_run_report` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTestRunReportTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetTestRunReportToolTest.java` | `read/discovery` | - |
 | `get_test_session_status` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTestSessionStatusTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetTestSessionStatusToolTest.java` | `read/discovery` | - |
@@ -54,6 +55,7 @@
 | `list_infobase_extensions` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListInfobaseExtensionsTool.java` | `-` | `read/discovery` | - |
 | `list_modules` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListModulesTool.java` | `-` | `read/discovery` | - |
 | `list_projects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListProjectsTool.java` | `-` | `read/discovery` | - |
+| `list_tasks` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListTasksTool.java` | `-` | `read/discovery` | - |
 | `prepare_test_session` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/PrepareTestSessionTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/PrepareTestSessionToolTest.java` | `mixed` | - |
 | `probe_extension_sync_bridge` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeExtensionSyncBridgeTool.java` | `-` | `mixed` | - |
 | `probe_extension_xml_contract` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeExtensionXmlContractTool.java` | `-` | `mixed` | - |
@@ -68,6 +70,7 @@
 | `set_debug_breakpoint` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/SetDebugBreakpointTool.java` | `-` | `mixed` | - |
 | `update_database` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/UpdateDatabaseTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `validate_query` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ValidateQueryTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/ValidateQueryToolTest.java` | `analysis/navigation` | - |
+| `wait_task` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/WaitTaskTool.java` | `-` | `mixed` | - |
 | `write_module_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/WriteModuleSourceTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/WriteModuleSourceToolTest.java` | `mutation/refactoring` | - |
 
 ## Tool Discovery Metadata
@@ -84,11 +87,13 @@
 | `get_debug_variables` | `Read runtime debug variables` |
 | `get_extension_properties` | `Read extension project properties` |
 | `get_extension_runtime_targets` | `Resolve extension runtime targets` |
+| `get_task_result` | `Get task result` |
 | `get_test_run_report` | `Read YAxUnit run report` |
 | `get_test_session_status` | `Inspect YAxUnit session status` |
 | `list_debug_breakpoints` | `List BSL debug breakpoints` |
 | `list_debug_sessions` | `List runtime debug sessions` |
 | `list_infobase_extensions` | `List installed infobase extensions` |
+| `list_tasks` | `List session tasks` |
 | `prepare_test_session` | `Prepare YAxUnit warm session` |
 | `probe_extension_sync_bridge` | `Probe extension sync bridge` |
 | `probe_extension_xml_contract` | `Probe extension XML contract` |
@@ -96,6 +101,7 @@
 | `remove_debug_breakpoint` | `Remove BSL debug breakpoint` |
 | `run_unit_tests` | `Run YAxUnit unit tests` |
 | `set_debug_breakpoint` | `Set BSL debug breakpoint` |
+| `wait_task` | `Wait for task terminal state` |
 
 ## MCP Resource Map
 

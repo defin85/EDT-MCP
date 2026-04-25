@@ -215,6 +215,7 @@ The server now exposes experimental MCP Tasks support for long-running tool exec
 - `update_database`, `apply_extension_to_infobase`, `run_unit_tests`, and `clean_project` keep `execution.taskSupport: "optional"` and are async-first at runtime: bare calls auto-promote into task-backed execution
 - `revalidate_objects` keeps `execution.taskSupport: "optional"` and is async-first only for full-project revalidation; partial object revalidation stays synchronous and task-augmented partial requests are rejected with an actionable error
 - `tasks/get`, `tasks/list`, `tasks/result`, and `tasks/cancel` are available over the same `/mcp` endpoint
+- Tool-level wrappers `list_tasks`, `get_task_result`, and `wait_task` expose the same session-owned lifecycle through `tools/list`; `wait_task` is bounded and returns timeout as a normal tool outcome
 - Follow-up `tasks/get`, `tasks/result`, and `tasks/cancel` calls must use the same `MCP-Session-Id` that created the task
 - The original `_meta.progressToken` stays valid for task-backed `update_database`, `apply_extension_to_infobase`, `run_unit_tests`, `clean_project`, and full-project `revalidate_objects` calls while the task is live; after a terminal MCP outcome, detached continuation moves to `get_operation_snapshot` for exact polling by `operationId`
 - When cancellation can leave EDT work running in background, terminal sync/task payloads include `_meta["io.ditrix.edt.mcp/detached-continuation"]` with the stable `operationId` and `pollTool: "get_operation_snapshot"`
@@ -359,6 +360,9 @@ Add to `claude_desktop_config.json`:
 | `revalidate_objects` | Revalidates specific objects by FQN (e.g. "Document.MyDoc"); full-project mode is async-first at runtime |
 | `get_bookmarks` | Returns workspace bookmarks |
 | `get_tasks` | Returns TODO/FIXME task markers |
+| `list_tasks` | List MCP tasks visible to the current `MCP-Session-Id` |
+| `get_task_result` | Retrieve a retained task result or latest snapshot without re-running the original operation |
+| `wait_task` | Bounded wait helper for a session-owned task; returns terminal evidence or timeout snapshot |
 | `get_check_description` | Returns check documentation from .md files |
 | `get_content_assist` | Get content assist proposals (type info, method hints) |
 | `get_platform_documentation` | Get platform type documentation (methods, properties, constructors) |
@@ -1243,7 +1247,7 @@ curl -sS -H 'Content-Type: application/json' \
 
 - **Markdown tools**: return Markdown as EmbeddedResource with `mimeType: text/markdown`; selected tools can additionally attach additive `structuredContent` for deterministic discovery or stable failure categories (`list_projects` is the primary discovery example)
 - **MCP resources**: `resources/list` and `resources/read` expose static markdown capability/workflow resources; these are separate from tool-call EmbeddedResource payloads and never expose live runtime state
-- **JSON tools**: `get_server_build_info`, `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects`, `run_unit_tests`, `get_test_run_report` - return JSON with `structuredContent`
+- **JSON tools**: `get_server_build_info`, `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects`, `run_unit_tests`, `list_tasks`, `get_task_result`, `wait_task`, `get_test_run_report` - return JSON with `structuredContent`
 - **Text tools**: `get_edt_version` - return plain text
 
 </details>

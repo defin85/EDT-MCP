@@ -222,6 +222,27 @@ public final class TaskRecord
         }
     }
 
+    public synchronized boolean awaitTerminal(long timeoutMillis) throws InterruptedException
+    {
+        if (status.isTerminal())
+        {
+            return true;
+        }
+        if (timeoutMillis <= 0)
+        {
+            return false;
+        }
+
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        long remaining = timeoutMillis;
+        while (!status.isTerminal() && remaining > 0)
+        {
+            wait(remaining);
+            remaining = deadline - System.currentTimeMillis();
+        }
+        return status.isTerminal();
+    }
+
     public synchronized boolean isExpired(Instant now)
     {
         if (ttl == null || ttl.longValue() <= 0 || !status.isTerminal())

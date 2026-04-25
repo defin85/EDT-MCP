@@ -17,16 +17,23 @@ import com.ditrix.edt.mcp.server.tasks.TaskRecord;
 public class CreateTaskResult
 {
     private TaskInfo task;
+    private TaskLifecycleEnvelope lifecycle;
     private Map<String, Object> _meta;
 
     public CreateTaskResult(TaskRecord task)
     {
         this.task = new TaskInfo(task);
+        this.lifecycle = new TaskLifecycleEnvelope(task, "accepted", "wait_task"); //$NON-NLS-1$ //$NON-NLS-2$
     }
 
     public TaskInfo getTask()
     {
         return task;
+    }
+
+    public TaskLifecycleEnvelope getLifecycle()
+    {
+        return lifecycle;
     }
 
     public Map<String, Object> get_meta()
