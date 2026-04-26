@@ -116,12 +116,18 @@ public class McpResourceRegistry
                         "4. Poll `list_debug_sessions` until a supported thread is suspended.",
                         "5. Call `get_debug_stack` with the suspended `threadId`.",
                         "6. Call `get_debug_variables` with a selected `frameId` when variable inspection is needed.",
-                        "7. Call `control_debug_session` for `step_over`, `step_into`, `step_return`, `resume`, `suspend`, or `terminate`.",
-                        "8. Call `remove_debug_breakpoint` for MCP-owned breakpoints during cleanup.",
+                        "7. Call `evaluate_debug_expression` only for bounded checks on a current suspended `frameId`; responses do not guarantee side-effect-free evaluation.",
+                        "8. Call `control_debug_session` for `step_over`, `step_into`, `step_return`, `resume`, `suspend`, or `terminate`.",
+                        "9. Call `remove_debug_breakpoint` or `cleanup_mcp_debug_breakpoints` for MCP-owned breakpoints during cleanup.",
+                        "",
+                        "## One-shot helper",
+                        "",
+                        "`run_to_debug_breakpoint` composes the sequence for common operator checks: it sets or reuses a temporary breakpoint, launches or resumes execution, waits up to `timeoutSeconds`, and returns direct stack/variable evidence or a timeout outcome.",
                         "",
                         "## Safety rules",
                         "",
-                        "Default cleanup protects pre-existing user breakpoints. Removing a non-owned user breakpoint requires the explicit override accepted by `remove_debug_breakpoint`.")));
+                        "Default cleanup protects pre-existing user breakpoints. Removing a non-owned user breakpoint requires the explicit override accepted by `remove_debug_breakpoint`.",
+                        "Expression evaluation can be observable in the runtime; do not treat it as a read-only proof surface.")));
 
         register(new McpResource(
                 "edt-mcp://capabilities/extension-lifecycle", //$NON-NLS-1$
@@ -186,6 +192,7 @@ public class McpResourceRegistry
                         "- `run_unit_tests` is YAxUnit-backed and configuration-project focused.",
                         "- Warm-session reuse is controlled by explicit `sessionMode` values and must fail closed for stale or mismatched sessions.",
                         "- Runtime debug control is limited to supported EDT runtime launches and standard Eclipse debug model capabilities exposed by the bridge.",
+                        "- Expression evaluation depends on the current frame debug model exposing an Eclipse watch-expression delegate and is not guaranteed side-effect-free.",
                         "- Breakpoint identifiers are stable for the current EDT workspace session only; refresh with `list_debug_breakpoints` after restart.")));
     }
 

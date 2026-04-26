@@ -3,9 +3,9 @@
 
 Этот файл генерируется из `tools/impl/*Tool.java` и `McpResourceRegistry.java` и служит fast reference для Codex.
 
-- Tool implementations found: `59`
-- Tool names documented in `README.md`: `59`
-- Tools with discovery annotations: `23`
+- Tool implementations found: `62`
+- Tool names documented in `README.md`: `62`
+- Tools with discovery annotations: `26`
 - Static MCP resources found: `7`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
@@ -17,9 +17,11 @@
 | `apply_extension_to_infobase` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ApplyExtensionToInfobaseTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/ApplyExtensionToInfobaseToolTest.java` | `mixed` | - |
 | `check_extension_applicability` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/CheckExtensionApplicabilityTool.java` | `-` | `mixed` | - |
 | `clean_project` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/CleanProjectTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
+| `cleanup_mcp_debug_breakpoints` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/CleanupMcpDebugBreakpointsTool.java` | `-` | `mixed` | - |
 | `control_debug_session` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ControlDebugSessionTool.java` | `-` | `mixed` | - |
 | `debug_launch` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/DebugLaunchTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `delete_metadata_object` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/DeleteMetadataObjectTool.java` | `-` | `mutation/refactoring` | - |
+| `evaluate_debug_expression` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/EvaluateDebugExpressionTool.java` | `-` | `mixed` | - |
 | `find_references` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/FindReferencesTool.java` | `-` | `analysis/navigation` | - |
 | `get_active_operation` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetActiveOperationTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `get_applications` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetApplicationsTool.java` | `-` | `read/discovery` | - |
@@ -65,6 +67,7 @@
 | `remove_debug_breakpoint` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RemoveDebugBreakpointTool.java` | `-` | `mixed` | - |
 | `rename_metadata_object` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RenameMetadataObjectTool.java` | `-` | `mutation/refactoring` | - |
 | `revalidate_objects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RevalidateObjectsTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
+| `run_to_debug_breakpoint` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RunToDebugBreakpointTool.java` | `-` | `mixed` | - |
 | `run_unit_tests` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RunUnitTestsTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/RunUnitTestsToolTest.java` | `mixed` | - |
 | `search_in_code` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/SearchInCodeTool.java` | `-` | `mixed` | - |
 | `set_debug_breakpoint` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/SetDebugBreakpointTool.java` | `-` | `mixed` | - |
@@ -81,8 +84,10 @@
 |------|------------------|
 | `apply_extension_to_infobase` | `Apply extension to infobase` |
 | `check_extension_applicability` | `Check extension applicability guardrail` |
+| `cleanup_mcp_debug_breakpoints` | `Clean up MCP debug breakpoints` |
 | `control_debug_session` | `Control runtime debug session` |
 | `debug_launch` | `Launch EDT debug session` |
+| `evaluate_debug_expression` | `Evaluate debug expression` |
 | `get_debug_stack` | `Read runtime debug stack` |
 | `get_debug_variables` | `Read runtime debug variables` |
 | `get_extension_properties` | `Read extension project properties` |
@@ -99,6 +104,7 @@
 | `probe_extension_xml_contract` | `Probe extension XML contract` |
 | `recycle_test_session` | `Recycle YAxUnit warm session` |
 | `remove_debug_breakpoint` | `Remove BSL debug breakpoint` |
+| `run_to_debug_breakpoint` | `Run to debug breakpoint` |
 | `run_unit_tests` | `Run YAxUnit unit tests` |
 | `set_debug_breakpoint` | `Set BSL debug breakpoint` |
 | `wait_task` | `Wait for task terminal state` |

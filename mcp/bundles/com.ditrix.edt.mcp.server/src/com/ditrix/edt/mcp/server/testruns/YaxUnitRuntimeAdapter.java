@@ -212,7 +212,6 @@ public final class YaxUnitRuntimeAdapter
         config.put("reportFormat", "jUnit"); //$NON-NLS-1$ //$NON-NLS-2$
         config.put("reportPath", reportPath.toAbsolutePath().toString()); //$NON-NLS-1$
         config.put("closeAfterTests", Boolean.valueOf(closeAfterTests)); //$NON-NLS-1$
-        config.put("showReport", Boolean.FALSE); //$NON-NLS-1$
         if (rpc != null && !rpc.isEmpty())
         {
             config.put("rpc", new LinkedHashMap<>(rpc)); //$NON-NLS-1$

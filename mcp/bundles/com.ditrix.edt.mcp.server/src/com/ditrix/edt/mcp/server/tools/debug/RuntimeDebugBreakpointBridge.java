@@ -234,6 +234,94 @@ public final class RuntimeDebugBreakpointBridge
         }
     }
 
+    public static String cleanupMcpBreakpoints(String projectFilter, String modulePathFilter, boolean dryRun)
+    {
+        IBreakpointManager manager = getBreakpointManager();
+        if (manager == null)
+        {
+            return ToolResult.error("Eclipse breakpoint manager is not available").toJson(); //$NON-NLS-1$
+        }
+
+        JsonArray removed = new JsonArray();
+        JsonArray skipped = new JsonArray();
+        JsonArray failed = new JsonArray();
+        int remaining = 0;
+
+        try
+        {
+            long snapshotId = SNAPSHOT_SEQUENCE.incrementAndGet();
+            for (IBreakpoint breakpoint : manager.getBreakpoints(BSL_MODEL_ID))
+            {
+                if (!isSupportedBslLineBreakpoint(breakpoint))
+                {
+                    continue;
+                }
+                BreakpointLocation location = locationOf(breakpoint);
+                if (!matchesFilter(location, projectFilter, modulePathFilter))
+                {
+                    remaining++;
+                    continue;
+                }
+
+                String breakpointId = breakpointId(breakpoint, location, snapshotId);
+                BREAKPOINTS.put(breakpointId, breakpoint);
+                boolean ownedByMcp = isOwnedByMcp(breakpoint);
+                JsonObject breakpointJson = toBreakpointJson(breakpoint, location, breakpointId, snapshotId, false,
+                        false);
+                if (!ownedByMcp)
+                {
+                    breakpointJson.addProperty("reason", "protected_user_breakpoint"); //$NON-NLS-1$ //$NON-NLS-2$
+                    skipped.add(breakpointJson);
+                    remaining++;
+                    continue;
+                }
+
+                if (dryRun)
+                {
+                    breakpointJson.addProperty("dryRun", true); //$NON-NLS-1$
+                    breakpointJson.addProperty("reason", "dry_run"); //$NON-NLS-1$ //$NON-NLS-2$
+                    skipped.add(breakpointJson);
+                    remaining++;
+                    continue;
+                }
+
+                try
+                {
+                    IWorkspace workspace = ResourcesPlugin.getWorkspace();
+                    IResource rule = breakpoint.getMarker().getResource();
+                    workspace.run(monitor -> breakpoint.delete(), rule, IWorkspace.AVOID_UPDATE, null);
+                    BREAKPOINTS.entrySet().removeIf(entry -> entry.getValue() == breakpoint);
+                    removed.add(breakpointJson);
+                }
+                catch (CoreException e)
+                {
+                    JsonObject failure = breakpointJson.deepCopy();
+                    failure.addProperty("error", e.getMessage()); //$NON-NLS-1$
+                    failed.add(failure);
+                    remaining++;
+                }
+            }
+
+            return ToolResult.success()
+                    .put("dryRun", dryRun) //$NON-NLS-1$
+                    .put("removed", removed) //$NON-NLS-1$
+                    .put("removedCount", removed.size()) //$NON-NLS-1$
+                    .put("skipped", skipped) //$NON-NLS-1$
+                    .put("skippedCount", skipped.size()) //$NON-NLS-1$
+                    .put("failed", failed) //$NON-NLS-1$
+                    .put("failedCount", failed.size()) //$NON-NLS-1$
+                    .put("remainingCount", remaining) //$NON-NLS-1$
+                    .toJson();
+        }
+        catch (CoreException e)
+        {
+            Activator.logError("Failed to clean up MCP debug breakpoints", e); //$NON-NLS-1$
+            return ToolResult.error("Failed to clean up MCP debug breakpoints: " + e.getMessage()) //$NON-NLS-1$
+                    .put("reason", "debug_backend_error") //$NON-NLS-1$ //$NON-NLS-2$
+                    .toJson();
+        }
+    }
+
     private static IBreakpoint createBreakpoint(IFile file, int lineNumber, boolean persisted)
             throws CoreException, ReflectiveOperationException
     {

@@ -17,6 +17,7 @@ import java.util.Map;
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
+import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
@@ -25,6 +26,8 @@ import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.Platform;
 import org.junit.Test;
 
+import com.ditrix.edt.mcp.server.tools.debug.RuntimeDebugBreakpointBridge;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -61,6 +64,34 @@ public class RuntimeDebugControlToolTest
     public void testGetDebugVariablesReportsStaleFrameId()
     {
         JsonObject payload = parse(new GetDebugVariablesTool().execute(Map.of("frameId", "frame-stale"))); //$NON-NLS-1$ //$NON-NLS-2$
+
+        assertFalse(payload.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertEquals("stale_frame_id", payload.get("reason").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    @Test
+    public void testEvaluateDebugExpressionRequiresFrameId()
+    {
+        JsonObject payload = parse(new EvaluateDebugExpressionTool().execute(Map.of("expression", "1 + 1"))); //$NON-NLS-1$ //$NON-NLS-2$
+
+        assertFalse(payload.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertEquals("frameId is required", payload.get("error").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    @Test
+    public void testEvaluateDebugExpressionRequiresExpression()
+    {
+        JsonObject payload = parse(new EvaluateDebugExpressionTool().execute(Map.of("frameId", "frame-1"))); //$NON-NLS-1$ //$NON-NLS-2$
+
+        assertFalse(payload.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertEquals("expression is required", payload.get("error").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    @Test
+    public void testEvaluateDebugExpressionReportsStaleFrameId()
+    {
+        JsonObject payload = parse(new EvaluateDebugExpressionTool()
+                .execute(Map.of("frameId", "frame-stale", "expression", "1 + 1"))); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
 
         assertFalse(payload.get("success").getAsBoolean()); //$NON-NLS-1$
         assertEquals("stale_frame_id", payload.get("reason").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
@@ -135,6 +166,18 @@ public class RuntimeDebugControlToolTest
     }
 
     @Test
+    public void testRunToDebugBreakpointRequiresThreadOrApplication()
+    {
+        JsonObject payload = parse(new RunToDebugBreakpointTool().execute(Map.of(
+                "projectName", "Demo", //$NON-NLS-1$ //$NON-NLS-2$
+                "modulePath", "CommonModules/A/Module.bsl", //$NON-NLS-1$ //$NON-NLS-2$
+                "lineNumber", "1"))); //$NON-NLS-1$ //$NON-NLS-2$
+
+        assertFalse(payload.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertEquals("debug_target_required", payload.get("reason").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    @Test
     public void testRemoveDebugBreakpointReportsStaleId()
     {
         JsonObject payload = parse(new RemoveDebugBreakpointTool()
@@ -142,6 +185,75 @@ public class RuntimeDebugControlToolTest
 
         assertFalse(payload.get("success").getAsBoolean()); //$NON-NLS-1$
         assertEquals("stale_breakpoint_id", payload.get("reason").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    @Test
+    public void testCleanupMcpDebugBreakpointsIsSafeWhenEmpty()
+    {
+        JsonObject payload = parse(new CleanupMcpDebugBreakpointsTool().execute(Map.of("dryRun", "true"))); //$NON-NLS-1$ //$NON-NLS-2$
+
+        assertTrue(payload.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertEquals(0, payload.get("removedCount").getAsInt()); //$NON-NLS-1$
+        assertEquals(0, payload.get("failedCount").getAsInt()); //$NON-NLS-1$
+    }
+
+    @Test
+    public void testCleanupMcpDebugBreakpointsRemovesOnlyOwnedBreakpoints()
+            throws Exception
+    {
+        String projectName = "BreakpointCleanupTest"; //$NON-NLS-1$
+        String modulePath = "CommonModules/Test/Module.bsl"; //$NON-NLS-1$
+        IProject project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
+        deleteProjectIfExists(project);
+
+        try
+        {
+            project.create(null);
+            project.open(null);
+            IFile file = project.getFile(new Path("src").append(modulePath)); //$NON-NLS-1$
+            createFileWithParents(file, "Procedure Test()\n\tMessage(\"owned\");\n\tMessage(\"user\");\nEndProcedure\n"); //$NON-NLS-1$
+
+            JsonObject ownedPayload = parse(new SetDebugBreakpointTool().execute(Map.of(
+                    "projectName", projectName, //$NON-NLS-1$
+                    "modulePath", modulePath, //$NON-NLS-1$
+                    "lineNumber", "2"))); //$NON-NLS-1$ //$NON-NLS-2$
+            if (!ownedPayload.get("success").getAsBoolean()) //$NON-NLS-1$
+            {
+                assertEquals("unsupported_backend_capability", ownedPayload.get("reason").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+                assertTrue("Unsupported backend is only expected when EDT debug core is absent: " + ownedPayload, //$NON-NLS-1$
+                        Platform.getBundle("com._1c.g5.v8.dt.debug.core") == null); //$NON-NLS-1$
+                return;
+            }
+
+            JsonObject userPayload = parse(new SetDebugBreakpointTool().execute(Map.of(
+                    "projectName", projectName, //$NON-NLS-1$
+                    "modulePath", modulePath, //$NON-NLS-1$
+                    "lineNumber", "3"))); //$NON-NLS-1$ //$NON-NLS-2$
+            assertTrue(userPayload.get("success").getAsBoolean()); //$NON-NLS-1$
+            String userBreakpointId = userPayload.getAsJsonObject("breakpoint") //$NON-NLS-1$
+                    .get("breakpointId").getAsString(); //$NON-NLS-1$
+            clearOwnerAttributeForLine(file, 3);
+
+            JsonObject cleanupPayload = parse(new CleanupMcpDebugBreakpointsTool().execute(Map.of(
+                    "projectName", projectName, //$NON-NLS-1$
+                    "modulePath", modulePath))); //$NON-NLS-1$
+
+            assertTrue(cleanupPayload.get("success").getAsBoolean()); //$NON-NLS-1$
+            assertEquals(1, cleanupPayload.get("removedCount").getAsInt()); //$NON-NLS-1$
+            assertEquals(1, cleanupPayload.get("skippedCount").getAsInt()); //$NON-NLS-1$
+            assertEquals(1, cleanupPayload.get("remainingCount").getAsInt()); //$NON-NLS-1$
+            JsonArray skipped = cleanupPayload.getAsJsonArray("skipped"); //$NON-NLS-1$
+            assertEquals("protected_user_breakpoint", skipped.get(0).getAsJsonObject().get("reason").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+
+            JsonObject removeUserPayload = parse(new RemoveDebugBreakpointTool().execute(Map.of(
+                    "breakpointId", userBreakpointId, //$NON-NLS-1$
+                    "removeUserBreakpoint", "true"))); //$NON-NLS-1$ //$NON-NLS-2$
+            assertTrue(removeUserPayload.get("success").getAsBoolean()); //$NON-NLS-1$
+        }
+        finally
+        {
+            deleteProjectIfExists(project);
+        }
     }
 
     @Test
@@ -217,10 +329,14 @@ public class RuntimeDebugControlToolTest
         assertTrue(new GetDebugStackTool().getInputSchema().contains("maxFrames")); //$NON-NLS-1$
         assertTrue(new GetDebugVariablesTool().getInputSchema().contains("variablePath")); //$NON-NLS-1$
         assertTrue(new GetDebugVariablesTool().getInputSchema().contains("maxVariables")); //$NON-NLS-1$
+        assertTrue(new EvaluateDebugExpressionTool().getInputSchema().contains("timeoutSeconds")); //$NON-NLS-1$
+        assertTrue(new EvaluateDebugExpressionTool().getInputSchema().contains("maxValueLength")); //$NON-NLS-1$
         assertTrue(new ControlDebugSessionTool().getInputSchema().contains("step_over")); //$NON-NLS-1$
         assertTrue(new ListDebugBreakpointsTool().getInputSchema().contains("modulePath")); //$NON-NLS-1$
         assertTrue(new SetDebugBreakpointTool().getInputSchema().contains("persisted")); //$NON-NLS-1$
         assertTrue(new RemoveDebugBreakpointTool().getInputSchema().contains("removeUserBreakpoint")); //$NON-NLS-1$
+        assertTrue(new CleanupMcpDebugBreakpointsTool().getInputSchema().contains("dryRun")); //$NON-NLS-1$
+        assertTrue(new RunToDebugBreakpointTool().getInputSchema().contains("cleanupOnTimeout")); //$NON-NLS-1$
     }
 
     private JsonObject parse(String json)
@@ -237,6 +353,20 @@ public class RuntimeDebugControlToolTest
             createFolderWithParents(folder);
         }
         file.create(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)), true, null);
+    }
+
+    private static void clearOwnerAttributeForLine(IFile file, int lineNumber)
+            throws CoreException
+    {
+        for (IMarker marker : file.findMarkers(null, true, IResource.DEPTH_ZERO))
+        {
+            if (marker.getAttribute(IMarker.LINE_NUMBER, -1) == lineNumber)
+            {
+                marker.setAttribute(RuntimeDebugBreakpointBridge.OWNER_ATTRIBUTE, (String)null);
+                return;
+            }
+        }
+        throw new AssertionError("No breakpoint marker for line " + lineNumber); //$NON-NLS-1$
     }
 
     private static void createFolderWithParents(IFolder folder)
