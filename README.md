@@ -352,6 +352,7 @@ Add to `claude_desktop_config.json`:
 |------|-------------|
 | `get_edt_version` | Returns current EDT version |
 | `get_server_build_info` | Returns exact EDT-MCP runtime build information from installed OSGi bundle metadata |
+| `describe_capabilities` | Describes installed runtime capabilities, registered tools/resources, and known fail-closed limitations |
 | `list_projects` | Lists workspace projects with project kind, capability hints, and extension metadata |
 | `get_configuration_properties` | Gets 1C configuration properties (configuration-only in this rollout) |
 | `get_project_errors` | Returns EDT problems with severity/checkId/objects filters |
@@ -412,6 +413,10 @@ Add to `claude_desktop_config.json`:
 | `go_to_definition` | Navigate to symbol definition (method by name, metadata object by FQN) |
 | `get_symbol_info` | Get type/hover info about a symbol at a BSL code position (inferred types, signatures, docs) |
 | `validate_query` | Validate 1C query text in project context (syntax + semantic errors, optional DCS mode) |
+| `diagnose_bsl_queries` | Extract and validate source-tied query text from BSL module or method scope |
+| `check_form_event_contract` | Check form metadata event bindings against form module handlers |
+| `probe_form_command_availability` | Fail-closed read-only guardrail for form command availability evidence |
+| `probe_document_write_post_dry_run` | Fail-closed document write/post dry-run guardrail; performs no mutation until rollback is proven |
 
 ## MCP Discovery Resources
 
@@ -427,6 +432,7 @@ Initial resources:
 - `edt-mcp://workflows/runtime-debug-breakpoint`
 - `edt-mcp://capabilities/extension-lifecycle`
 - `edt-mcp://workflows/extension-apply`
+- `edt-mcp://capabilities/live-acceptance-evidence`
 - `edt-mcp://limitations/runtime-testing-and-debug`
 
 These resources are guidance only. Live state for tasks, warm sessions, retained reports, debug
@@ -541,6 +547,14 @@ Current non-goals for extension projects in this rollout:
 - **`validate_query`**: Validates query language text in project context and returns syntax/semantic errors.
   - Parameters: `projectName` (required), `queryText` (required), `dcsMode` (optional, default `false`)
   - Use `dcsMode=true` for Data Composition System (DCS) queries
+- **`diagnose_bsl_queries`**: Extracts static query text assignments from BSL module/method scope,
+  validates them in project context, and returns source locations plus extraction limitations.
+- **`check_form_event_contract`**: Compares form metadata event bindings with form module handlers so
+  handler existence is not mistaken for actual event wiring.
+- **`probe_form_command_availability`**: Returns bounded fail-closed live evidence for form command
+  availability; unsupported runtime command state is reported explicitly.
+- **`probe_document_write_post_dry_run`**: Returns `unsupported_safe_dry_run` and performs no
+  write/post until rollback and side-effect isolation are proven.
 
 ### Project Errors Tool
 
@@ -1292,7 +1306,7 @@ curl -sS -H 'Content-Type: application/json' \
 
 - **Markdown tools**: return Markdown as EmbeddedResource with `mimeType: text/markdown`; selected tools can additionally attach additive `structuredContent` for deterministic discovery or stable failure categories (`list_projects` is the primary discovery example)
 - **MCP resources**: `resources/list` and `resources/read` expose static markdown capability/workflow resources; these are separate from tool-call EmbeddedResource payloads and never expose live runtime state
-- **JSON tools**: `get_server_build_info`, `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects`, `run_unit_tests`, `list_tasks`, `get_task_result`, `wait_task`, `get_test_run_report` - return JSON with `structuredContent`
+- **JSON tools**: `get_server_build_info`, `describe_capabilities`, `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects`, `run_unit_tests`, `list_tasks`, `get_task_result`, `wait_task`, `get_test_run_report`, `diagnose_bsl_queries`, `check_form_event_contract`, `probe_form_command_availability`, `probe_document_write_post_dry_run` - return JSON with `structuredContent`
 - **Text tools**: `get_edt_version` - return plain text
 
 </details>

@@ -179,6 +179,33 @@ public class McpResourceRegistry
                         "`apply_extension_to_infobase` mutates the selected infobase target. The developer probes are not normal automation entry points. Do not infer live apply completion from resources; poll task and operation tools.")));
 
         register(new McpResource(
+                "edt-mcp://capabilities/live-acceptance-evidence", //$NON-NLS-1$
+                "live-acceptance-evidence", //$NON-NLS-1$
+                "Live acceptance evidence", //$NON-NLS-1$
+                "Bounded diagnostics and fail-closed probes for proving acceptance evidence from installed runtime capabilities.", //$NON-NLS-1$
+                MARKDOWN,
+                markdown(
+                        "# Live acceptance evidence",
+                        "",
+                        "Use this capability when an agent needs direct proof for a narrow acceptance question without widening into a general test framework.",
+                        "",
+                        "## Tool chain",
+                        "",
+                        "1. Call `describe_capabilities` first to inspect the installed runtime surface and known limitations.",
+                        "2. Use `revalidate_objects` dry-run/preflight options before expensive validation when available.",
+                        "3. Use `diagnose_bsl_queries` to extract and validate source-tied query text from a module or method scope.",
+                        "4. Use `check_form_event_contract` to compare form metadata event bindings with form module handlers.",
+                        "5. Use `probe_form_command_availability` only as a fail-closed live-evidence guardrail when command state is not safely exposed.",
+                        "6. Use `probe_document_write_post_dry_run` only for its explicit unsupported-safe-dry-run evidence until rollback semantics are proven.",
+                        "",
+                        "## Scope limits",
+                        "",
+                        "- Document movement reads by recorder are intentionally deferred to `add-04-document-movement-live-evidence-probe`.",
+                        "- Form command availability does not claim live runtime support unless the response status says it is supported.",
+                        "- Document write/post dry-run performs no mutation in this rollout and reports unsupported until rollback and side-effect isolation are proven.",
+                        "- Static resources are guidance only; current availability is authoritative through `describe_capabilities` and each tool response.")));
+
+        register(new McpResource(
                 "edt-mcp://limitations/runtime-testing-and-debug", //$NON-NLS-1$
                 "runtime-testing-and-debug-limitations", //$NON-NLS-1$
                 "Runtime testing and debug limitations", //$NON-NLS-1$

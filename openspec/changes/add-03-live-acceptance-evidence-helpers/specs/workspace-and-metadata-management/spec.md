@@ -20,19 +20,19 @@ procedure, unbound event, mismatched handler name, unsupported form metadata, an
 - **AND** it includes enough evidence for an agent to cite the form path, event name, handler name,
   and procedure location
 
-### Requirement: Bounded Live Infobase Evidence Probes
+### Requirement: Bounded Live Evidence Guardrails
 
-The system SHALL expose narrow live infobase evidence probes for common acceptance checks. Probes
-SHALL be bounded by timeout, SHALL identify the target application/infobase, SHALL be read-only by
-default, and SHALL fail closed when safe live evidence cannot be collected.
+The system SHALL expose narrow live evidence guardrails for common acceptance checks. Guardrails
+SHALL be bounded by timeout, SHALL identify the target application/infobase where applicable, SHALL
+be read-only by default, and SHALL fail closed when safe live evidence cannot be collected.
 
-#### Scenario: Client reads document movements by recorder
+#### Scenario: Client probes form command availability without a safe runtime API
 
-- **WHEN** a client invokes a document-movement evidence probe for a recorder reference in a selected
-  application target
-- **THEN** the server reads matching movement records without mutating the infobase
-- **AND** the response includes the recorder identity, register names, row counts, bounded sample
-  records, target identity, and timeout status
+- **WHEN** a client invokes a form-command availability probe for a selected application target
+- **AND** the installed runtime cannot expose command state through a proven headless-safe API
+- **THEN** the server returns an explicit unsupported or unknown outcome
+- **AND** the response remains `readOnly=true` and includes the target identity, timeout status, and
+  limitation reason
 
 #### Scenario: Client requests unsafe write or post dry-run
 

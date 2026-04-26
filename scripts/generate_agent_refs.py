@@ -30,12 +30,22 @@ def camel_to_snake(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
+def discover_tool_name(class_name: str, source: str) -> str:
+    literal_name = re.search(r"public\s+static\s+final\s+String\s+NAME\s*=\s*\"([^\"]+)\"", source)
+    if literal_name:
+        return literal_name.group(1)
+    literal_return = re.search(r"String\s+getName\(\)\s*\{[^{}]*return\s+\"([^\"]+)\"", source, re.DOTALL)
+    if literal_return:
+        return literal_return.group(1)
+    return camel_to_snake(class_name.removesuffix("Tool"))
+
+
 def discover_tools() -> list[dict[str, str]]:
     tools: list[dict[str, str]] = []
     for path in sorted(TOOLS_DIR.glob("*Tool.java")):
         source = path.read_text(encoding="utf-8")
         class_name = path.stem
-        tool_name = camel_to_snake(class_name.removesuffix("Tool"))
+        tool_name = discover_tool_name(class_name, source)
         tests = sorted(TESTS_DIR.rglob(f"{class_name}Test.java"))
         test_ref = ", ".join(str(p.relative_to(ROOT)) for p in tests) if tests else "-"
         annotation = "-"
@@ -49,13 +59,20 @@ def discover_tools() -> list[dict[str, str]]:
         if tool_name in LONG_RUNNING_TOOLS:
             zone = "long-running-runtime"
             notes = "`docs/agent/long-running-ops.md`"
-        elif tool_name.startswith(("get_", "list_")):
+        elif tool_name.startswith(("get_", "list_")) or tool_name == "describe_capabilities":
             zone = "read/discovery"
             notes = "-"
         elif tool_name.startswith(("rename_", "delete_", "add_", "write_")):
             zone = "mutation/refactoring"
             notes = "-"
-        elif tool_name in {"validate_query", "find_references", "go_to_definition", "get_symbol_info"}:
+        elif tool_name in {
+            "validate_query",
+            "diagnose_bsl_queries",
+            "check_form_event_contract",
+            "find_references",
+            "go_to_definition",
+            "get_symbol_info",
+        }:
             zone = "analysis/navigation"
             notes = "-"
         else:

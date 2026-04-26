@@ -78,6 +78,7 @@ import com.ditrix.edt.mcp.server.tools.impl.ProbeExtensionXmlContractTool;
 import com.ditrix.edt.mcp.server.tools.impl.CleanProjectTool;
 import com.ditrix.edt.mcp.server.tools.impl.CleanupMcpDebugBreakpointsTool;
 import com.ditrix.edt.mcp.server.tools.impl.ControlDebugSessionTool;
+import com.ditrix.edt.mcp.server.tools.impl.DescribeCapabilitiesTool;
 import com.ditrix.edt.mcp.server.tools.impl.EvaluateDebugExpressionTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetDebugStackTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetDebugVariablesTool;
@@ -98,6 +99,10 @@ import com.ditrix.edt.mcp.server.tools.impl.SearchInCodeTool;
 import com.ditrix.edt.mcp.server.tools.impl.ReadMethodSourceTool;
 import com.ditrix.edt.mcp.server.tools.impl.GetMethodCallHierarchyTool;
 import com.ditrix.edt.mcp.server.tools.impl.ValidateQueryTool;
+import com.ditrix.edt.mcp.server.tools.impl.BslQueryDiagnosticsTool;
+import com.ditrix.edt.mcp.server.tools.impl.FormEventContractTool;
+import com.ditrix.edt.mcp.server.tools.impl.ProbeDocumentWritePostDryRunTool;
+import com.ditrix.edt.mcp.server.tools.impl.ProbeFormCommandAvailabilityTool;
 import com.ditrix.edt.mcp.server.tools.impl.WaitTaskTool;
 import com.ditrix.edt.mcp.server.tools.impl.RenameMetadataObjectTool;
 import com.ditrix.edt.mcp.server.tools.impl.DeleteMetadataObjectTool;
@@ -277,6 +282,7 @@ public class McpServer
         // Register built-in tools
         registry.register(new GetEdtVersionTool());
         registry.register(new GetServerBuildInfoTool());
+        registry.register(new DescribeCapabilitiesTool());
         registry.register(new ListProjectsTool());
         registry.register(new GetConfigurationPropertiesTool());
         registry.register(new GetExtensionPropertiesTool());
@@ -340,6 +346,10 @@ public class McpServer
         registry.register(new GetSymbolInfoTool());
         registry.register(new GetFormScreenshotTool());
         registry.register(new ValidateQueryTool());
+        registry.register(new BslQueryDiagnosticsTool());
+        registry.register(new FormEventContractTool());
+        registry.register(new ProbeFormCommandAvailabilityTool());
+        registry.register(new ProbeDocumentWritePostDryRunTool());
 
         // Metadata refactoring tools
         registry.register(new RenameMetadataObjectTool());

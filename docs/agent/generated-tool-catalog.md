@@ -3,10 +3,10 @@
 
 Этот файл генерируется из `tools/impl/*Tool.java` и `McpResourceRegistry.java` и служит fast reference для Codex.
 
-- Tool implementations found: `62`
-- Tool names documented in `README.md`: `62`
-- Tools with discovery annotations: `26`
-- Static MCP resources found: `7`
+- Tool implementations found: `67`
+- Tool names documented in `README.md`: `67`
+- Tools with discovery annotations: `31`
+- Static MCP resources found: `8`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
 ## Tool Map
@@ -15,14 +15,17 @@
 |------|----------------|---------------|------|-------|
 | `add_metadata_attribute` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/AddMetadataAttributeTool.java` | `-` | `mutation/refactoring` | - |
 | `apply_extension_to_infobase` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ApplyExtensionToInfobaseTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/ApplyExtensionToInfobaseToolTest.java` | `mixed` | - |
+| `diagnose_bsl_queries` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/BslQueryDiagnosticsTool.java` | `-` | `analysis/navigation` | - |
 | `check_extension_applicability` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/CheckExtensionApplicabilityTool.java` | `-` | `mixed` | - |
 | `clean_project` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/CleanProjectTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `cleanup_mcp_debug_breakpoints` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/CleanupMcpDebugBreakpointsTool.java` | `-` | `mixed` | - |
 | `control_debug_session` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ControlDebugSessionTool.java` | `-` | `mixed` | - |
 | `debug_launch` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/DebugLaunchTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `delete_metadata_object` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/DeleteMetadataObjectTool.java` | `-` | `mutation/refactoring` | - |
+| `describe_capabilities` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/DescribeCapabilitiesTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/DescribeCapabilitiesToolTest.java` | `read/discovery` | - |
 | `evaluate_debug_expression` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/EvaluateDebugExpressionTool.java` | `-` | `mixed` | - |
 | `find_references` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/FindReferencesTool.java` | `-` | `analysis/navigation` | - |
+| `check_form_event_contract` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/FormEventContractTool.java` | `-` | `analysis/navigation` | - |
 | `get_active_operation` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetActiveOperationTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `get_applications` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetApplicationsTool.java` | `-` | `read/discovery` | - |
 | `get_bookmarks` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetBookmarksTool.java` | `-` | `read/discovery` | - |
@@ -59,8 +62,10 @@
 | `list_projects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListProjectsTool.java` | `-` | `read/discovery` | - |
 | `list_tasks` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListTasksTool.java` | `-` | `read/discovery` | - |
 | `prepare_test_session` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/PrepareTestSessionTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/PrepareTestSessionToolTest.java` | `mixed` | - |
+| `probe_document_write_post_dry_run` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeDocumentWritePostDryRunTool.java` | `-` | `mixed` | - |
 | `probe_extension_sync_bridge` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeExtensionSyncBridgeTool.java` | `-` | `mixed` | - |
 | `probe_extension_xml_contract` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeExtensionXmlContractTool.java` | `-` | `mixed` | - |
+| `probe_form_command_availability` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeFormCommandAvailabilityTool.java` | `-` | `mixed` | - |
 | `read_method_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ReadMethodSourceTool.java` | `-` | `mixed` | - |
 | `read_module_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ReadModuleSourceTool.java` | `-` | `mixed` | - |
 | `recycle_test_session` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RecycleTestSessionTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/RecycleTestSessionToolTest.java` | `mixed` | - |
@@ -83,11 +88,14 @@
 | Tool | Annotation title |
 |------|------------------|
 | `apply_extension_to_infobase` | `Apply extension to infobase` |
+| `diagnose_bsl_queries` | `Diagnose BSL queries` |
 | `check_extension_applicability` | `Check extension applicability guardrail` |
 | `cleanup_mcp_debug_breakpoints` | `Clean up MCP debug breakpoints` |
 | `control_debug_session` | `Control runtime debug session` |
 | `debug_launch` | `Launch EDT debug session` |
+| `describe_capabilities` | `Describe installed runtime capabilities` |
 | `evaluate_debug_expression` | `Evaluate debug expression` |
+| `check_form_event_contract` | `Check form event contract` |
 | `get_debug_stack` | `Read runtime debug stack` |
 | `get_debug_variables` | `Read runtime debug variables` |
 | `get_extension_properties` | `Read extension project properties` |
@@ -100,8 +108,10 @@
 | `list_infobase_extensions` | `List installed infobase extensions` |
 | `list_tasks` | `List session tasks` |
 | `prepare_test_session` | `Prepare YAxUnit warm session` |
+| `probe_document_write_post_dry_run` | `Probe document write/post dry-run` |
 | `probe_extension_sync_bridge` | `Probe extension sync bridge` |
 | `probe_extension_xml_contract` | `Probe extension XML contract` |
+| `probe_form_command_availability` | `Probe form command availability` |
 | `recycle_test_session` | `Recycle YAxUnit warm session` |
 | `remove_debug_breakpoint` | `Remove BSL debug breakpoint` |
 | `run_to_debug_breakpoint` | `Run to debug breakpoint` |
@@ -121,6 +131,7 @@ Static resources are exposed through `resources/list` and `resources/read`; live
 | `edt-mcp://workflows/runtime-debug-breakpoint` | `runtime-debug-breakpoint-workflow` | `text/markdown` | Step-by-step MCP-owned BSL breakpoint workflow for runtime debug sessions. |
 | `edt-mcp://capabilities/extension-lifecycle` | `extension-lifecycle` | `text/markdown` | Extension discovery, installed-extension inspection, guarded applicability, apply, and diagnostic probe workflow. |
 | `edt-mcp://workflows/extension-apply` | `extension-apply-workflow` | `text/markdown` | Step-by-step workflow for applying an extension project to an infobase target. |
+| `edt-mcp://capabilities/live-acceptance-evidence` | `live-acceptance-evidence` | `text/markdown` | Bounded diagnostics and fail-closed probes for proving acceptance evidence from installed runtime capabilities. |
 | `edt-mcp://limitations/runtime-testing-and-debug` | `runtime-testing-and-debug-limitations` | `text/markdown` | Known scope limits for the YAxUnit and runtime debug discovery contours. |
 
 ## Drift Check
