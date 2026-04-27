@@ -47,6 +47,7 @@ import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
 import com.e1c.g5.v8.dt.check.ICheckScheduler;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 
@@ -70,6 +71,8 @@ public class RevalidateObjectsTool implements IMcpTool
     private static final String STAGE_WAITING_FOR_BUILD = "waiting_for_build"; //$NON-NLS-1$
     private static final String STAGE_COMPLETION = "completion"; //$NON-NLS-1$
     private static final String STAGE_FAILURE = "failure"; //$NON-NLS-1$
+    private static final int MAX_TIMEOUT_SECONDS = 300;
+    private static final int MANY_OBJECTS_RISK_THRESHOLD = 20;
 
     @Override
     public String getName()
@@ -94,6 +97,9 @@ public class RevalidateObjectsTool implements IMcpTool
         return JsonSchemaBuilder.object()
             .stringProperty("projectName", "EDT project name (required)", true) //$NON-NLS-1$ //$NON-NLS-2$
             .stringArrayProperty("objects", "FQNs to revalidate (e.g. ['Document.SalesOrder']). Russian type names supported (e.g. 'Документ.ПродажаТоваров'). Empty array = full project revalidation") //$NON-NLS-1$ //$NON-NLS-2$
+            .booleanProperty("dryRun", "Resolve targets and return safety preflight without scheduling validation") //$NON-NLS-1$ //$NON-NLS-2$
+            .integerProperty("timeoutSeconds", "Requested safety bound in seconds (1..300); unsupported paths fail closed") //$NON-NLS-1$ //$NON-NLS-2$
+            .booleanProperty("failFast", "Return without scheduling when preflight status is not supported") //$NON-NLS-1$ //$NON-NLS-2$
             .build();
     }
 
@@ -136,6 +142,21 @@ public class RevalidateObjectsTool implements IMcpTool
     {
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String objectsJson = JsonUtils.extractStringArgument(params, "objects"); //$NON-NLS-1$
+        boolean dryRun = JsonUtils.extractBooleanArgument(params, "dryRun", false); //$NON-NLS-1$
+        boolean failFast = JsonUtils.extractBooleanArgument(params, "failFast", false); //$NON-NLS-1$
+        TimeoutRequest timeout = parseTimeoutRequest(JsonUtils.extractStringArgument(params, "timeoutSeconds")); //$NON-NLS-1$
+        List<String> objects = parseObjectsList(objectsJson);
+        boolean safetyRequested = dryRun || failFast || timeout.requested;
+
+        if (safetyRequested)
+        {
+            PreflightResult preflight = buildPreflight(projectName, objects, dryRun, failFast, timeout);
+            if (dryRun || !"supported".equals(preflight.status) //$NON-NLS-1$
+                    || failFast && !"supported".equals(preflight.status)) //$NON-NLS-1$
+            {
+                return preflight.toJson(false);
+            }
+        }
 
         // Check if project is ready for operations
         if (projectName != null && !projectName.isEmpty())
@@ -147,7 +168,6 @@ public class RevalidateObjectsTool implements IMcpTool
             }
         }
 
-        List<String> objects = parseObjectsList(objectsJson);
         return revalidateObjects(projectName, objects);
     }
 
@@ -185,6 +205,160 @@ public class RevalidateObjectsTool implements IMcpTool
             Activator.logError("Error parsing objects JSON: " + objectsJson, e); //$NON-NLS-1$
         }
         return result;
+    }
+
+    PreflightResult buildPreflight(String projectName, List<String> objectFqns, boolean dryRun, boolean failFast,
+            TimeoutRequest timeout)
+    {
+        boolean fullProjectRevalidation = objectFqns == null || objectFqns.isEmpty();
+        PreflightObjects objects = new PreflightObjects(objectFqns);
+        JsonArray risks = new JsonArray();
+        String status = "supported"; //$NON-NLS-1$
+        String timeoutSemantics = timeout.requested ? "supported" : "not_requested"; //$NON-NLS-1$ //$NON-NLS-2$
+
+        IProject project = null;
+        if (projectName == null || projectName.isEmpty())
+        {
+            status = "invalid"; //$NON-NLS-1$
+            addRisk(risks, "project_required", "blocker", "projectName is required", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                    "Pass an open EDT project name before requesting revalidation preflight."); //$NON-NLS-1$
+        }
+        else
+        {
+            project = ResourcesPlugin.getWorkspace().getRoot().getProject(projectName);
+            if (project == null || !project.exists())
+            {
+                status = "invalid"; //$NON-NLS-1$
+                addRisk(risks, "project_not_found", "blocker", "Project was not found: " + projectName, //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                        "Check the EDT workspace target and projectName."); //$NON-NLS-1$
+            }
+            else if (!project.isOpen())
+            {
+                status = "busy"; //$NON-NLS-1$
+                addRisk(risks, "project_not_ready", "blocker", "Project is closed: " + projectName, //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                        "Open the project before scheduling validation."); //$NON-NLS-1$
+            }
+            else if (!fullProjectRevalidation)
+            {
+                resolvePreflightObjects(project, objects);
+                if (!objects.notFound.isEmpty())
+                {
+                    status = "invalid"; //$NON-NLS-1$
+                    addRisk(risks, "objects_not_found", "blocker", "Some requested objects were not found", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                            "Review preflight.objects.notFound and retry with valid metadata FQNs."); //$NON-NLS-1$
+                }
+            }
+        }
+
+        if (timeout.invalid)
+        {
+            status = "invalid"; //$NON-NLS-1$
+            timeoutSemantics = "unsupported"; //$NON-NLS-1$
+            addRisk(risks, "invalid_timeout", "blocker", "timeoutSeconds must be in range 1..300", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                    "Use a timeoutSeconds value from 1 to 300 or omit it."); //$NON-NLS-1$
+        }
+        else if (timeout.requested && !fullProjectRevalidation)
+        {
+            if ("supported".equals(status)) //$NON-NLS-1$
+            {
+                status = "unsupported"; //$NON-NLS-1$
+            }
+            timeoutSemantics = "unsupported"; //$NON-NLS-1$
+            addRisk(risks, "unsupported_timeout", "blocker", //$NON-NLS-1$ //$NON-NLS-2$
+                    "Object-scoped revalidation cannot prove a hard timeout boundary in the current EDT path.", //$NON-NLS-1$
+                    "Use dryRun first, omit timeoutSeconds, or run full-project revalidation through task-backed execution."); //$NON-NLS-1$
+        }
+        else if ("supported".equals(status) && fullProjectRevalidation) //$NON-NLS-1$
+        {
+            status = "risky"; //$NON-NLS-1$
+            addRisk(risks, "full_project_revalidation", "warning", //$NON-NLS-1$ //$NON-NLS-2$
+                    "Full project revalidation can be broad and slow.", //$NON-NLS-1$
+                    "Prefer task-backed execution and poll task/operation state."); //$NON-NLS-1$
+        }
+        else if ("supported".equals(status) && objects.requested > MANY_OBJECTS_RISK_THRESHOLD) //$NON-NLS-1$
+        {
+            status = "risky"; //$NON-NLS-1$
+            addRisk(risks, "many_objects", "warning", //$NON-NLS-1$ //$NON-NLS-2$
+                    "Many object-scoped validations were requested.", //$NON-NLS-1$
+                    "Split the request into smaller batches or run full-project validation as a task."); //$NON-NLS-1$
+        }
+
+        return new PreflightResult(projectName, fullProjectRevalidation, dryRun, failFast, timeoutSemantics, status,
+                risks, objects);
+    }
+
+    private void resolvePreflightObjects(IProject project, PreflightObjects objects)
+    {
+        objects.normalized.clear();
+        for (String fqn : objects.original)
+        {
+            objects.normalized.add(MetadataTypeUtils.normalizeFqn(fqn));
+        }
+
+        IBmModelManager bmModelManager = Activator.getDefault() != null ? Activator.getDefault().getBmModelManager()
+                : null;
+        IDtProjectManager dtProjectManager = Activator.getDefault() != null ? Activator.getDefault().getDtProjectManager()
+                : null;
+        if (bmModelManager == null || dtProjectManager == null)
+        {
+            return;
+        }
+        IDtProject dtProject = dtProjectManager.getDtProject(project);
+        IBmModel bmModel = dtProject != null ? bmModelManager.getModel(dtProject) : null;
+        if (bmModel == null)
+        {
+            return;
+        }
+
+        bmModel.executeReadonlyTask(new AbstractBmTask<Void>("RevalidateObjectsPreflight") //$NON-NLS-1$
+        {
+            @Override
+            public Void execute(IBmTransaction tx, IProgressMonitor pm)
+            {
+                for (int i = 0; i < objects.normalized.size(); i++)
+                {
+                    IBmObject obj = tx.getTopObjectByFqn(objects.normalized.get(i));
+                    if (obj != null && obj.bmGetId() > 0)
+                    {
+                        objects.found.add(objects.original.get(i));
+                    }
+                    else
+                    {
+                        objects.notFound.add(objects.original.get(i));
+                    }
+                }
+                return null;
+            }
+        });
+    }
+
+    private static TimeoutRequest parseTimeoutRequest(String rawValue)
+    {
+        if (rawValue == null || rawValue.isBlank())
+        {
+            return new TimeoutRequest(false, false, 0);
+        }
+        try
+        {
+            double parsed = Double.parseDouble(rawValue.trim());
+            int value = (int) parsed;
+            boolean invalid = parsed != Math.floor(parsed) || value < 1 || value > MAX_TIMEOUT_SECONDS;
+            return new TimeoutRequest(true, invalid, value);
+        }
+        catch (NumberFormatException e)
+        {
+            return new TimeoutRequest(true, true, 0);
+        }
+    }
+
+    private static void addRisk(JsonArray risks, String id, String severity, String message, String recommendation)
+    {
+        JsonObject risk = new JsonObject();
+        risk.addProperty("id", id); //$NON-NLS-1$
+        risk.addProperty("severity", severity); //$NON-NLS-1$
+        risk.addProperty("message", message); //$NON-NLS-1$
+        risk.addProperty("recommendation", recommendation); //$NON-NLS-1$
+        risks.add(risk);
     }
 
     /**
@@ -578,5 +752,111 @@ public class RevalidateObjectsTool implements IMcpTool
     private long elapsedMillis(long startedAt)
     {
         return (System.nanoTime() - startedAt) / 1_000_000L;
+    }
+
+    static final class TimeoutRequest
+    {
+        final boolean requested;
+        final boolean invalid;
+        final int seconds;
+
+        TimeoutRequest(boolean requested, boolean invalid, int seconds)
+        {
+            this.requested = requested;
+            this.invalid = invalid;
+            this.seconds = seconds;
+        }
+    }
+
+    static final class PreflightObjects
+    {
+        final List<String> original;
+        final List<String> normalized = new ArrayList<>();
+        final List<String> found = new ArrayList<>();
+        final List<String> notFound = new ArrayList<>();
+        final int requested;
+
+        PreflightObjects(List<String> objectFqns)
+        {
+            this.original = objectFqns != null ? new ArrayList<>(objectFqns) : List.of();
+            this.requested = this.original.size();
+            for (String fqn : this.original)
+            {
+                this.normalized.add(MetadataTypeUtils.normalizeFqn(fqn));
+            }
+        }
+
+        JsonObject toJson()
+        {
+            JsonObject json = new JsonObject();
+            json.addProperty("requested", requested); //$NON-NLS-1$
+            json.add("found", toJsonArray(found)); //$NON-NLS-1$
+            json.add("notFound", toJsonArray(notFound)); //$NON-NLS-1$
+            json.add("normalized", toJsonArray(normalized)); //$NON-NLS-1$
+            return json;
+        }
+    }
+
+    static final class PreflightResult
+    {
+        final String projectName;
+        final boolean fullProjectRevalidation;
+        final boolean dryRun;
+        final boolean failFast;
+        final String timeoutSemantics;
+        final String status;
+        final JsonArray risks;
+        final PreflightObjects objects;
+
+        PreflightResult(String projectName, boolean fullProjectRevalidation, boolean dryRun, boolean failFast,
+                String timeoutSemantics, String status, JsonArray risks, PreflightObjects objects)
+        {
+            this.projectName = projectName;
+            this.fullProjectRevalidation = fullProjectRevalidation;
+            this.dryRun = dryRun;
+            this.failFast = failFast;
+            this.timeoutSemantics = timeoutSemantics;
+            this.status = status;
+            this.risks = risks;
+            this.objects = objects;
+        }
+
+        String toJson(boolean executed)
+        {
+            JsonObject result = new JsonObject();
+            result.addProperty("success", true); //$NON-NLS-1$
+            result.addProperty("project", projectName); //$NON-NLS-1$
+            result.addProperty("mode", executed ? fullProjectRevalidation ? "full" : "objects" : "preflight"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+            result.addProperty("dryRun", dryRun); //$NON-NLS-1$
+            result.addProperty("executed", executed); //$NON-NLS-1$
+            result.add("preflight", toPreflightJson()); //$NON-NLS-1$
+            return result.toString();
+        }
+
+        private JsonObject toPreflightJson()
+        {
+            JsonObject preflight = new JsonObject();
+            preflight.addProperty("status", status); //$NON-NLS-1$
+            preflight.addProperty("wouldSchedule", fullProjectRevalidation ? "full_project_revalidation" //$NON-NLS-1$ //$NON-NLS-2$
+                    : objects.requested > 0 ? "object_validation" : "none"); //$NON-NLS-1$ //$NON-NLS-2$
+            JsonObject safety = new JsonObject();
+            safety.addProperty("timeout", timeoutSemantics); //$NON-NLS-1$
+            safety.addProperty("failFast", failFast ? "supported" : "not_requested"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+            safety.addProperty("dryRun", dryRun ? "supported" : "not_requested"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+            preflight.add("safetySemantics", safety); //$NON-NLS-1$
+            preflight.add("risks", risks); //$NON-NLS-1$
+            preflight.add("objects", objects.toJson()); //$NON-NLS-1$
+            return preflight;
+        }
+    }
+
+    private static JsonArray toJsonArray(List<String> values)
+    {
+        JsonArray array = new JsonArray();
+        for (String value : values)
+        {
+            array.add(value);
+        }
+        return array;
     }
 }

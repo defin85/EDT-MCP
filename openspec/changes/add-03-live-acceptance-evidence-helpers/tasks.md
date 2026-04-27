@@ -33,6 +33,6 @@
 - [x] 4.1 Run the smallest relevant Maven/Tycho test gates for validation, query, form, and
       capability code.
 - [x] 4.2 Run `openspec validate add-03-live-acceptance-evidence-helpers --strict --no-interactive`.
-- [ ] 4.3 After reinstalling the built plugin, live-verify `describe_capabilities`, safe
+- [x] 4.3 After reinstalling the built plugin, live-verify `describe_capabilities`, safe
       revalidation preflight, query diagnostics, form event contract checks, and the live evidence
       guardrail outcomes included in this rollout.

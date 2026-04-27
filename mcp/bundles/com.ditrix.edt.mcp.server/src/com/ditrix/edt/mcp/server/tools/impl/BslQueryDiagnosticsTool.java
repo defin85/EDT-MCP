@@ -439,7 +439,50 @@ public class BslQueryDiagnosticsTool implements IMcpTool
         {
             return LiteralParseResult.unsupported("no_string_literal"); //$NON-NLS-1$
         }
-        return LiteralParseResult.supported(query.toString());
+        return LiteralParseResult.supported(normalizeBslQueryText(query.toString()));
+    }
+
+    static String normalizeBslQueryText(String queryText)
+    {
+        if (queryText == null || queryText.isEmpty())
+        {
+            return queryText;
+        }
+
+        String[] lines = queryText.split("\\R", -1); //$NON-NLS-1$
+        List<String> normalized = new ArrayList<>(lines.length);
+        for (String line : lines)
+        {
+            int index = 0;
+            while (index < line.length() && Character.isWhitespace(line.charAt(index)))
+            {
+                index++;
+            }
+            if (index < line.length() && line.charAt(index) == '|')
+            {
+                normalized.add(line.substring(index + 1));
+            }
+            else
+            {
+                normalized.add(line);
+            }
+        }
+
+        int first = 0;
+        while (first < normalized.size() && normalized.get(first).isBlank())
+        {
+            first++;
+        }
+        int last = normalized.size() - 1;
+        while (last >= first && normalized.get(last).isBlank())
+        {
+            last--;
+        }
+        if (first > last)
+        {
+            return ""; //$NON-NLS-1$
+        }
+        return String.join("\n", normalized.subList(first, last + 1)); //$NON-NLS-1$
     }
 
     private static int skipToLineEnd(String text, int index)

@@ -217,6 +217,12 @@ public class FormEventContractTool implements IMcpTool
                 continue;
             }
             Element element = (Element) node;
+            EventBinding handlersBinding = findHandlersBinding(element, eventName, formLines);
+            if (handlersBinding != null)
+            {
+                return handlersBinding;
+            }
+
             String eventCandidate = firstText(element, "event", "eventName", "name"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
             if (!eventName.equalsIgnoreCase(nullToEmpty(eventCandidate)))
             {
@@ -231,6 +237,26 @@ public class FormEventContractTool implements IMcpTool
             return new EventBinding(eventName, handler, line);
         }
         return null;
+    }
+
+    private static EventBinding findHandlersBinding(Element element, String eventName, List<String> formLines)
+    {
+        if (!"handlers".equalsIgnoreCase(localName(element))) //$NON-NLS-1$
+        {
+            return null;
+        }
+        String eventCandidate = firstText(element, "event", "eventName"); //$NON-NLS-1$ //$NON-NLS-2$
+        if (!eventName.equalsIgnoreCase(nullToEmpty(eventCandidate)))
+        {
+            return null;
+        }
+        String handler = firstText(element, "handler", "handlerName", "method", "procedure", "action", "name"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$ //$NON-NLS-6$
+        if (!hasText(handler))
+        {
+            handler = firstAttribute(element, "handler", "handlerName", "method", "procedure", "action", "name"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$ //$NON-NLS-6$
+        }
+        int line = findLine(formLines, eventName, handler);
+        return new EventBinding(eventName, handler, line);
     }
 
     private static EventBinding findTextualBinding(List<String> formLines, String eventName)
@@ -319,6 +345,11 @@ public class FormEventContractTool implements IMcpTool
                 return tagValue;
             }
             tagValue = extractSimpleXmlTagValue(line, "handlerName"); //$NON-NLS-1$
+            if (hasText(tagValue))
+            {
+                return tagValue;
+            }
+            tagValue = extractSimpleXmlTagValue(line, "name"); //$NON-NLS-1$
             if (hasText(tagValue))
             {
                 return tagValue;

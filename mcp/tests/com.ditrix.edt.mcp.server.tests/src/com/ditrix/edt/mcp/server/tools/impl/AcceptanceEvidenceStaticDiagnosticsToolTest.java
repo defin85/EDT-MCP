@@ -74,6 +74,24 @@ public class AcceptanceEvidenceStaticDiagnosticsToolTest
     }
 
     @Test
+    public void testNormalizesBslPipePrefixedMultilineQueryText()
+    {
+        List<String> lines = List.of(
+                "Procedure BuildQuery()", //$NON-NLS-1$
+                "    Query.Text = \"", //$NON-NLS-1$
+                "        |SELECT Ref", //$NON-NLS-1$
+                "        |FROM Catalog.Products\";", //$NON-NLS-1$
+                "EndProcedure"); //$NON-NLS-1$
+
+        BslQueryDiagnosticsTool.ExtractionResult result = BslQueryDiagnosticsTool.extractQueries(lines,
+                "CommonModules/Test/Module.bsl", "BuildQuery", 20); //$NON-NLS-1$ //$NON-NLS-2$
+
+        assertEquals(1, result.queries.size());
+        assertTrue(result.queries.get(0).supportedExtraction);
+        assertEquals("SELECT Ref\nFROM Catalog.Products", result.queries.get(0).queryText); //$NON-NLS-1$
+    }
+
+    @Test
     public void testReportsMissingMethodScope()
     {
         BslQueryDiagnosticsTool.ExtractionResult result = BslQueryDiagnosticsTool.extractQueries(
@@ -116,6 +134,25 @@ public class AcceptanceEvidenceStaticDiagnosticsToolTest
         assertNotNull(result.binding);
         assertNotNull(result.procedure);
         assertEquals(1, result.procedure.startLine);
+    }
+
+    @Test
+    public void testValidEdtHandlersEventNameBinding()
+    {
+        FormEventContractTool.ContractResult result = FormEventContractTool.checkContract(
+                "Catalog.Files.Forms.ItemForm", //$NON-NLS-1$
+                "src/Catalogs/Files/Forms/ItemForm/Form.form", //$NON-NLS-1$
+                "src/Catalogs/Files/Forms/ItemForm/Module.bsl", //$NON-NLS-1$
+                "<form:Form xmlns:form=\"http://g5.1c.ru/v8/dt/form\">" //$NON-NLS-1$
+                        + "<handlers><event>OnOpen</event><name>ПриОткрытии</name></handlers></form:Form>", //$NON-NLS-1$
+                List.of("<handlers>", "<event>OnOpen</event>", "<name>ПриОткрытии</name>", "</handlers>"), //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+                List.of("Procedure ПриОткрытии(Отказ)", "EndProcedure"), //$NON-NLS-1$ //$NON-NLS-2$
+                "OnOpen", "ПриОткрытии"); //$NON-NLS-1$ //$NON-NLS-2$
+
+        assertEquals("valid", result.status); //$NON-NLS-1$
+        assertNotNull(result.binding);
+        assertEquals("ПриОткрытии", result.binding.handlerName); //$NON-NLS-1$
+        assertNotNull(result.procedure);
     }
 
     @Test
