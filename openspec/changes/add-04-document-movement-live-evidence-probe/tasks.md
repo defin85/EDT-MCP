@@ -25,7 +25,7 @@
 
 - [x] 4.1 Run focused Maven/Tycho tests for the probe contract, bounds, and fail-closed outcomes.
 - [x] 4.2 Run `openspec validate add-04-document-movement-live-evidence-probe --strict --no-interactive`.
-- [ ] 4.3 Reinstall the built plugin and live-verify document movement evidence against a real
+- [x] 4.3 Reinstall the built plugin and live-verify document movement evidence against a real
       EDT/infobase target.
 
 ## Evidence
@@ -42,3 +42,14 @@
 - Live installed-runtime verification remains open until EDT is reinstalled from the rebuilt update
   site and the installed `probe_document_movements` result is captured from a real application
   target.
+- 2026-04-27 live verification after reinstall: raw MCP endpoint
+  `http://172.24.192.1:8766/mcp` reports installed bundle `1.0.0.202604270759`, `tools/list`
+  exposes 68 tools including `probe_document_movements`, and `describe_capabilities` reports
+  `documentMovements.status=unsupported` with limitation
+  `document_movement_read_transport_unavailable`. Calling `probe_document_movements` against
+  project `Демонстрационная_конфигурация_Управляемое_приложение`, application
+  `8e939665-b67a-4ebe-a233-2a9bbc3c2251`, recorder `Document.Заказ:live-acceptance-probe`, and
+  register filter `AccumulationRegister.ТоварыНаСкладах` returned `status=unsupported`,
+  `readOnly=true`, `performed=false`, `preflight.target=resolved`, `preflight.accessSettings=valid`,
+  `transport.queryExecution=not_attempted`, `transport.clientSuppliedQueryAccepted=false`, and
+  `transport.bridgeState=not_started`.
