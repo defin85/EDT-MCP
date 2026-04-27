@@ -105,6 +105,61 @@ public class AcceptanceEvidenceLiveProbeGuardrailsTest
         assertEquals("action must be 'write' or 'post'", payload.get("error").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
     }
 
+    @Test
+    public void testDocumentMovementsToolContract()
+    {
+        ProbeDocumentMovementsTool tool = new ProbeDocumentMovementsTool();
+
+        assertEquals("probe_document_movements", tool.getName()); //$NON-NLS-1$
+        assertEquals(ResponseType.JSON, tool.getResponseType());
+        assertTrue(tool.getInputSchema().contains("\"projectName\"")); //$NON-NLS-1$
+        assertTrue(tool.getInputSchema().contains("\"applicationId\"")); //$NON-NLS-1$
+        assertTrue(tool.getInputSchema().contains("\"recorder\"")); //$NON-NLS-1$
+        assertTrue(tool.getInputSchema().contains("\"registers\"")); //$NON-NLS-1$
+        assertTrue(tool.getInputSchema().contains("\"timeoutSeconds\"")); //$NON-NLS-1$
+        assertTrue(tool.getInputSchema().contains("\"sampleLimit\"")); //$NON-NLS-1$
+        assertFalse(tool.getInputSchema().contains("queryText")); //$NON-NLS-1$
+        assertNotNull(tool.getAnnotations());
+        assertEquals(Boolean.TRUE, tool.getAnnotations().getReadOnlyHint());
+    }
+
+    @Test
+    public void testDocumentMovementsUnsupportedResultDoesNotReadOrMutate()
+    {
+        JsonObject payload = ProbeDocumentMovementsTool.buildUnsupportedResult(
+                "TestProject", "app-1", null, //$NON-NLS-1$ //$NON-NLS-2$
+                "Document.SalesOrder:000000001", //$NON-NLS-1$
+                java.util.List.of("AccumulationRegister.Stock"), //$NON-NLS-1$
+                10, 5, "document_movement_read_transport_unavailable", "unsupported", //$NON-NLS-1$ //$NON-NLS-2$
+                "No read transport", "Add a proven read-only transport"); //$NON-NLS-1$ //$NON-NLS-2$
+
+        assertTrue(payload.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertEquals("unsupported", payload.get("status").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertTrue(payload.get("readOnly").getAsBoolean()); //$NON-NLS-1$
+        assertFalse(payload.get("performed").getAsBoolean()); //$NON-NLS-1$
+        assertFalse(payload.get("timeout").getAsBoolean()); //$NON-NLS-1$
+        assertEquals(5, payload.get("sampleLimit").getAsInt()); //$NON-NLS-1$
+        assertEquals("document_movements", payload.getAsJsonObject("target").get("type").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertEquals("AccumulationRegister.Stock", payload.getAsJsonObject("target") //$NON-NLS-1$ //$NON-NLS-2$
+                .getAsJsonArray("registers").get(0).getAsString()); //$NON-NLS-1$
+        JsonObject preflight = payload.getAsJsonObject("preflight"); //$NON-NLS-1$
+        assertEquals("resolved", preflight.get("target").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertEquals("valid", preflight.get("accessSettings").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertEquals("unsupported", preflight.get("runtimeReadTransport").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertEquals("not_started", preflight.get("runtimeBridge").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertTrue(preflight.get("unsupportedTarget").getAsBoolean()); //$NON-NLS-1$
+        JsonObject transport = payload.getAsJsonObject("transport"); //$NON-NLS-1$
+        assertEquals("unsupported", transport.get("status").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertFalse(transport.get("readOnlyProven").getAsBoolean()); //$NON-NLS-1$
+        assertEquals("not_attempted", transport.get("queryExecution").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertFalse(transport.get("clientSuppliedQueryAccepted").getAsBoolean()); //$NON-NLS-1$
+        JsonObject evidence = payload.getAsJsonObject("evidence"); //$NON-NLS-1$
+        assertFalse(evidence.get("rowCountKnown").getAsBoolean()); //$NON-NLS-1$
+        assertEquals(0, evidence.get("registerCount").getAsInt()); //$NON-NLS-1$
+        assertEquals("document_movement_read_transport_unavailable", payload.getAsJsonArray("limitations") //$NON-NLS-1$ //$NON-NLS-2$
+                .get(0).getAsJsonObject().get("id").getAsString()); //$NON-NLS-1$
+    }
+
     private static JsonObject parse(String json)
     {
         return JsonParser.parseString(json).getAsJsonObject();

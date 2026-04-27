@@ -417,6 +417,7 @@ Add to `claude_desktop_config.json`:
 | `check_form_event_contract` | Check form metadata event bindings against form module handlers |
 | `probe_form_command_availability` | Fail-closed read-only guardrail for form command availability evidence |
 | `probe_document_write_post_dry_run` | Fail-closed document write/post dry-run guardrail; performs no mutation until rollback is proven |
+| `probe_document_movements` | Fail-closed document movement evidence probe by recorder; performs no runtime query until read-only transport is proven |
 
 ## MCP Discovery Resources
 
@@ -555,6 +556,9 @@ Current non-goals for extension projects in this rollout:
   availability; unsupported runtime command state is reported explicitly.
 - **`probe_document_write_post_dry_run`**: Returns `unsupported_safe_dry_run` and performs no
   write/post until rollback and side-effect isolation are proven.
+- **`probe_document_movements`**: Returns recorder-scoped document movement evidence when a
+  headless-safe read transport is proven; otherwise returns explicit `unsupported` evidence without
+  executing runtime queries, writes, posts, or arbitrary client-supplied query text.
 
 ### Project Errors Tool
 
@@ -1306,7 +1310,7 @@ curl -sS -H 'Content-Type: application/json' \
 
 - **Markdown tools**: return Markdown as EmbeddedResource with `mimeType: text/markdown`; selected tools can additionally attach additive `structuredContent` for deterministic discovery or stable failure categories (`list_projects` is the primary discovery example)
 - **MCP resources**: `resources/list` and `resources/read` expose static markdown capability/workflow resources; these are separate from tool-call EmbeddedResource payloads and never expose live runtime state
-- **JSON tools**: `get_server_build_info`, `describe_capabilities`, `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects`, `run_unit_tests`, `list_tasks`, `get_task_result`, `wait_task`, `get_test_run_report`, `diagnose_bsl_queries`, `check_form_event_contract`, `probe_form_command_availability`, `probe_document_write_post_dry_run` - return JSON with `structuredContent`
+- **JSON tools**: `get_server_build_info`, `describe_capabilities`, `get_configuration_properties`, `get_extension_properties`, `get_extension_runtime_targets`, `list_infobase_extensions`, `check_extension_applicability`, `apply_extension_to_infobase`, `probe_extension_sync_bridge`, `probe_extension_xml_contract`, `clean_project`, `revalidate_objects`, `run_unit_tests`, `list_tasks`, `get_task_result`, `wait_task`, `get_test_run_report`, `diagnose_bsl_queries`, `check_form_event_contract`, `probe_form_command_availability`, `probe_document_write_post_dry_run`, `probe_document_movements` - return JSON with `structuredContent`
 - **Text tools**: `get_edt_version` - return plain text
 
 </details>

@@ -77,7 +77,8 @@ public class DescribeCapabilitiesTool implements IMcpTool
             FormEventContractTool.NAME);
 
     private static final List<String> LIVE_READ_ONLY_PROBES = Arrays.asList(
-            ProbeFormCommandAvailabilityTool.NAME);
+            ProbeFormCommandAvailabilityTool.NAME,
+            ProbeDocumentMovementsTool.NAME);
 
     private static final List<String> LIVE_MUTATION_DRY_RUN_TOOLS = Arrays.asList(
             ProbeDocumentWritePostDryRunTool.NAME);
@@ -249,10 +250,19 @@ public class DescribeCapabilitiesTool implements IMcpTool
         area.add("mutationDryRun", mutationDryRun); //$NON-NLS-1$
 
         JsonObject documentMovements = new JsonObject();
-        documentMovements.addProperty("status", "deferred"); //$NON-NLS-1$ //$NON-NLS-2$
+        boolean documentMovementProbeRegistered = registeredToolNames.contains(ProbeDocumentMovementsTool.NAME);
+        documentMovements.addProperty("status", documentMovementProbeRegistered ? "unsupported" : "deferred"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+        if (documentMovementProbeRegistered)
+        {
+            JsonArray movementTools = new JsonArray();
+            movementTools.add(ProbeDocumentMovementsTool.NAME);
+            documentMovements.add("tools", movementTools); //$NON-NLS-1$
+        }
         documentMovements.addProperty("changeId", "add-04-document-movement-live-evidence-probe"); //$NON-NLS-1$ //$NON-NLS-2$
         documentMovements.addProperty("reason", //$NON-NLS-1$
-                "Register-record reads by recorder require a separate proven read-only runtime path."); //$NON-NLS-1$
+                documentMovementProbeRegistered
+                        ? "Registered probe fails closed until a headless-safe register-read transport is proven." //$NON-NLS-1$
+                        : "Register-record reads by recorder require a separate proven read-only runtime path."); //$NON-NLS-1$
         area.add("documentMovements", documentMovements); //$NON-NLS-1$
         return area;
     }
@@ -262,8 +272,16 @@ public class DescribeCapabilitiesTool implements IMcpTool
         JsonArray limitations = new JsonArray();
         limitations.add(limitation("installed_runtime_only", "runtime", "info", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
                 "This report describes the currently installed and registered runtime, not checked-in source code.")); //$NON-NLS-1$
-        limitations.add(limitation("document_movements_deferred_to_add_04", "liveEvidence", "warning", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-                "Document movement reads by recorder are intentionally deferred to add-04-document-movement-live-evidence-probe.")); //$NON-NLS-1$
+        if (registeredToolNames.contains(ProbeDocumentMovementsTool.NAME))
+        {
+            limitations.add(limitation("document_movement_read_transport_unavailable", "liveEvidence", "blocker", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                    "Document movement reads by recorder are registered as a fail-closed probe until a proven headless-safe read transport exists.")); //$NON-NLS-1$
+        }
+        else
+        {
+            limitations.add(limitation("document_movements_deferred_to_add_04", "liveEvidence", "warning", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                    "Document movement reads by recorder are intentionally deferred to add-04-document-movement-live-evidence-probe.")); //$NON-NLS-1$
+        }
         if (registeredToolNames.contains(ProbeFormCommandAvailabilityTool.NAME))
         {
             limitations.add(limitation("runtime_form_command_api_unavailable", "liveEvidence", "warning", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$

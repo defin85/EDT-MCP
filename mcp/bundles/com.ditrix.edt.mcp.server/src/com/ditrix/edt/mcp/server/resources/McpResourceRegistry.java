@@ -197,10 +197,11 @@ public class McpResourceRegistry
                         "4. Use `check_form_event_contract` to compare form metadata event bindings with form module handlers.",
                         "5. Use `probe_form_command_availability` only as a fail-closed live-evidence guardrail when command state is not safely exposed.",
                         "6. Use `probe_document_write_post_dry_run` only for its explicit unsupported-safe-dry-run evidence until rollback semantics are proven.",
+                        "7. Use `probe_document_movements` for recorder-scoped movement evidence; treat `unsupported` as authoritative until a headless-safe register-read transport is proven.",
                         "",
                         "## Scope limits",
                         "",
-                        "- Document movement reads by recorder are intentionally deferred to `add-04-document-movement-live-evidence-probe`.",
+                        "- Document movement reads by recorder fail closed unless the installed runtime reports a proven read-only movement transport.",
                         "- Form command availability does not claim live runtime support unless the response status says it is supported.",
                         "- Document write/post dry-run performs no mutation in this rollout and reports unsupported until rollback and side-effect isolation are proven.",
                         "- Static resources are guidance only; current availability is authoritative through `describe_capabilities` and each tool response.")));

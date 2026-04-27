@@ -63,9 +63,10 @@ public class DescribeCapabilitiesToolTest
         assertEquals("edt-mcp-server", payload.getAsJsonObject("server").get("serverName").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
 
         JsonObject tools = payload.getAsJsonObject("tools"); //$NON-NLS-1$
-        assertEquals(8, tools.get("count").getAsInt()); //$NON-NLS-1$
+        assertEquals(9, tools.get("count").getAsInt()); //$NON-NLS-1$
         assertArrayContains(tools.getAsJsonArray("names"), "describe_capabilities"); //$NON-NLS-1$ //$NON-NLS-2$
         assertArrayContains(tools.getAsJsonArray("names"), "probe_document_write_post_dry_run"); //$NON-NLS-1$ //$NON-NLS-2$
+        assertArrayContains(tools.getAsJsonArray("names"), "probe_document_movements"); //$NON-NLS-1$ //$NON-NLS-2$
         JsonObject describeItem = findToolItem(tools.getAsJsonArray("items"), "describe_capabilities"); //$NON-NLS-1$ //$NON-NLS-2$
         assertEquals("JSON", describeItem.get("responseType").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
         assertEquals("forbidden", describeItem.get("taskSupport").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
@@ -82,11 +83,13 @@ public class DescribeCapabilitiesToolTest
         assertEquals("partial", capabilities.getAsJsonObject("liveEvidence").get("status").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
         assertArrayContains(capabilities.getAsJsonObject("liveEvidence").getAsJsonArray("readOnlyProbes"), //$NON-NLS-1$ //$NON-NLS-2$
                 "probe_form_command_availability"); //$NON-NLS-1$
+        assertArrayContains(capabilities.getAsJsonObject("liveEvidence").getAsJsonArray("readOnlyProbes"), //$NON-NLS-1$ //$NON-NLS-2$
+                "probe_document_movements"); //$NON-NLS-1$
         assertEquals("unsupported", capabilities.getAsJsonObject("liveEvidence") //$NON-NLS-1$ //$NON-NLS-2$
                 .getAsJsonObject("mutationDryRun").get("status").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
-        assertEquals("deferred", capabilities.getAsJsonObject("liveEvidence") //$NON-NLS-1$ //$NON-NLS-2$
+        assertEquals("unsupported", capabilities.getAsJsonObject("liveEvidence") //$NON-NLS-1$ //$NON-NLS-2$
                 .getAsJsonObject("documentMovements").get("status").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
-        assertLimitation(payload.getAsJsonArray("limitations"), "document_movements_deferred_to_add_04"); //$NON-NLS-1$ //$NON-NLS-2$
+        assertLimitation(payload.getAsJsonArray("limitations"), "document_movement_read_transport_unavailable"); //$NON-NLS-1$ //$NON-NLS-2$
         assertLimitation(payload.getAsJsonArray("limitations"), "document_write_post_rollback_not_proven"); //$NON-NLS-1$ //$NON-NLS-2$
     }
 
@@ -115,6 +118,7 @@ public class DescribeCapabilitiesToolTest
         registry.register(new FormEventContractTool());
         registry.register(new ProbeFormCommandAvailabilityTool());
         registry.register(new ProbeDocumentWritePostDryRunTool());
+        registry.register(new ProbeDocumentMovementsTool());
     }
 
     private static JsonObject parse(String json)

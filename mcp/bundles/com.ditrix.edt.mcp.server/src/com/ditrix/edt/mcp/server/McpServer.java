@@ -101,6 +101,7 @@ import com.ditrix.edt.mcp.server.tools.impl.GetMethodCallHierarchyTool;
 import com.ditrix.edt.mcp.server.tools.impl.ValidateQueryTool;
 import com.ditrix.edt.mcp.server.tools.impl.BslQueryDiagnosticsTool;
 import com.ditrix.edt.mcp.server.tools.impl.FormEventContractTool;
+import com.ditrix.edt.mcp.server.tools.impl.ProbeDocumentMovementsTool;
 import com.ditrix.edt.mcp.server.tools.impl.ProbeDocumentWritePostDryRunTool;
 import com.ditrix.edt.mcp.server.tools.impl.ProbeFormCommandAvailabilityTool;
 import com.ditrix.edt.mcp.server.tools.impl.WaitTaskTool;
@@ -350,6 +351,7 @@ public class McpServer
         registry.register(new FormEventContractTool());
         registry.register(new ProbeFormCommandAvailabilityTool());
         registry.register(new ProbeDocumentWritePostDryRunTool());
+        registry.register(new ProbeDocumentMovementsTool());
 
         // Metadata refactoring tools
         registry.register(new RenameMetadataObjectTool());

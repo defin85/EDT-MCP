@@ -25,6 +25,18 @@ operations. They do not by themselves prove safe arbitrary register-record reads
     writing, launching unsafe interactive flows, or requiring unbounded client-supplied queries.
   - Until then, the tool must return `unsupported` or remain unimplemented.
 
+- Decision: current transport verdict is fail-closed unsupported.
+  - Existing EDT-MCP runtime surfaces can resolve configuration projects, infobase applications,
+    access settings, thick-client launch, YAxUnit execution, metadata synchronization, XML export,
+    and extension synchronization.
+  - None of those surfaces is a proven headless-safe register-record read API: thick-client/YAxUnit
+    paths execute arbitrary 1C code, synchronization paths are mutation-oriented, and a generic query
+    endpoint would accept unbounded client-supplied query text.
+  - The first add-04 implementation therefore registers `probe_document_movements` as a bounded
+    fail-closed probe. It performs target/access preflight, reports recorder/register intent and
+    limitations, and returns `unsupported` with `queryExecution=not_attempted` until a narrow
+    read-only runtime transport is introduced and live-proven.
+
 - Decision: the probe is purpose-built, not a generic query endpoint.
   - Inputs identify `projectName`, `applicationId`, `recorder`, optional register filters,
     `timeoutSeconds`, and `sampleLimit`.
@@ -54,3 +66,9 @@ operations. They do not by themselves prove safe arbitrary register-record reads
    shaping.
 6. Update docs/resources/generated catalog.
 7. Reinstall and live-verify against a real EDT/infobase target.
+
+## Implementation Notes
+
+- `add-03-live-acceptance-evidence-helpers` intentionally deferred document movement reads here.
+  The current add-04 implementation keeps that split honest by exposing the dedicated probe while
+  continuing to fail closed when the installed runtime cannot prove read-only movement access.

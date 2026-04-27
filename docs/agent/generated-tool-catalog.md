@@ -3,9 +3,9 @@
 
 Этот файл генерируется из `tools/impl/*Tool.java` и `McpResourceRegistry.java` и служит fast reference для Codex.
 
-- Tool implementations found: `67`
-- Tool names documented in `README.md`: `67`
-- Tools with discovery annotations: `31`
+- Tool implementations found: `68`
+- Tool names documented in `README.md`: `68`
+- Tools with discovery annotations: `32`
 - Static MCP resources found: `8`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
@@ -62,6 +62,7 @@
 | `list_projects` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListProjectsTool.java` | `-` | `read/discovery` | - |
 | `list_tasks` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListTasksTool.java` | `-` | `read/discovery` | - |
 | `prepare_test_session` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/PrepareTestSessionTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/PrepareTestSessionToolTest.java` | `mixed` | - |
+| `probe_document_movements` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeDocumentMovementsTool.java` | `-` | `mixed` | - |
 | `probe_document_write_post_dry_run` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeDocumentWritePostDryRunTool.java` | `-` | `mixed` | - |
 | `probe_extension_sync_bridge` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeExtensionSyncBridgeTool.java` | `-` | `mixed` | - |
 | `probe_extension_xml_contract` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ProbeExtensionXmlContractTool.java` | `-` | `mixed` | - |
@@ -108,6 +109,7 @@
 | `list_infobase_extensions` | `List installed infobase extensions` |
 | `list_tasks` | `List session tasks` |
 | `prepare_test_session` | `Prepare YAxUnit warm session` |
+| `probe_document_movements` | `Probe document movements` |
 | `probe_document_write_post_dry_run` | `Probe document write/post dry-run` |
 | `probe_extension_sync_bridge` | `Probe extension sync bridge` |
 | `probe_extension_xml_contract` | `Probe extension XML contract` |
