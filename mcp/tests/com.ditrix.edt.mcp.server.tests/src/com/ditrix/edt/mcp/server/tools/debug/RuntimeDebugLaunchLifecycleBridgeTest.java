@@ -15,6 +15,7 @@ import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.eclipse.debug.core.ILaunch;
 import org.eclipse.debug.core.ILaunchConfiguration;
@@ -80,6 +81,49 @@ public class RuntimeDebugLaunchLifecycleBridgeTest
     }
 
     @Test
+    public void testUnreadyRuntimeLaunchIsPromotedToUnsupportedSessionDiagnostic()
+    {
+        ILaunch launch = launch("ProjectA", "ApplicationA", true, false, new IProcess[0], //$NON-NLS-1$ //$NON-NLS-2$
+                new IDebugTarget[0]);
+
+        JsonObject snapshot = RuntimeDebugLaunchLifecycleBridge.snapshotLaunches(new ILaunch[] { launch },
+                "ProjectA", "ApplicationA"); //$NON-NLS-1$ //$NON-NLS-2$
+
+        assertEquals(1, RuntimeDebugLaunchLifecycleBridge.unsupportedLaunchesForSessionDiagnostics(snapshot).size());
+        JsonObject sessionDiagnostic = RuntimeDebugLaunchLifecycleBridge
+                .unsupportedLaunchesForSessionDiagnostics(snapshot).get(0).getAsJsonObject();
+        assertFalse(sessionDiagnostic.get("supported").getAsBoolean()); //$NON-NLS-1$
+        assertTrue(sessionDiagnostic.getAsJsonArray("unsupportedReasons").toString() //$NON-NLS-1$
+                .contains("supported_thread_unavailable")); //$NON-NLS-1$
+    }
+
+    @Test
+    public void testAcceptedLaunchResultIncludesPublicPhasePayload()
+    {
+        JsonObject launchResult = new JsonObject();
+        launchResult.addProperty("success", true); //$NON-NLS-1$
+        launchResult.addProperty("accepted", true); //$NON-NLS-1$
+        launchResult.addProperty("phase", "launch_config_started"); //$NON-NLS-1$ //$NON-NLS-2$
+        JsonObject emptySnapshot = new JsonObject();
+        emptySnapshot.addProperty("success", true); //$NON-NLS-1$
+        emptySnapshot.addProperty("count", 0); //$NON-NLS-1$
+
+        RuntimeDebugLaunchLifecycleBridge.enrichLaunchResult(launchResult, emptySnapshot);
+
+        assertTrue(launchResult.has("phases")); //$NON-NLS-1$
+        assertEquals("true", launchResult.getAsJsonObject("phases") //$NON-NLS-1$ //$NON-NLS-2$
+                .get("launch_config_started").getAsString()); //$NON-NLS-1$
+        assertEquals("pending", launchResult.getAsJsonObject("phases") //$NON-NLS-1$ //$NON-NLS-2$
+                .get("runtime_process_started").getAsString()); //$NON-NLS-1$
+        assertEquals("false", launchResult.getAsJsonObject("phases") //$NON-NLS-1$ //$NON-NLS-2$
+                .get("supported_thread_visible").getAsString()); //$NON-NLS-1$
+        assertTrue(launchResult.has("launch")); //$NON-NLS-1$
+        assertTrue(launchResult.has("operatorChoices")); //$NON-NLS-1$
+        assertTrue(launchResult.getAsJsonArray("operatorChoices").toString() //$NON-NLS-1$
+                .contains("wait_debug_session")); //$NON-NLS-1$
+    }
+
+    @Test
     public void testDuplicatePreflightFailsClosedForActiveMatchingLaunch()
     {
         ILaunch launch = launch("ProjectA", "ApplicationA", true, false, new IProcess[0], //$NON-NLS-1$ //$NON-NLS-2$
@@ -125,6 +169,66 @@ public class RuntimeDebugLaunchLifecycleBridgeTest
         assertEquals("debug_session_wait_timeout", result.get("reason").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
         assertTrue(result.get("timedOut").getAsBoolean()); //$NON-NLS-1$
         assertTrue(result.has("latestLaunchSnapshot")); //$NON-NLS-1$
+    }
+
+    @Test
+    public void testWaitForSupportedSessionReturnsFinalLaunchSnapshotOnSuccess()
+    {
+        JsonObject supportedSessions = new JsonObject();
+        supportedSessions.addProperty("success", true); //$NON-NLS-1$
+        supportedSessions.addProperty("count", 1); //$NON-NLS-1$
+        AtomicInteger snapshotCounter = new AtomicInteger();
+
+        JsonObject result = JsonParser.parseString(RuntimeDebugLaunchLifecycleBridge.waitForSupportedSession(
+                () -> supportedSessions, () -> {
+                    JsonObject snapshot = new JsonObject();
+                    snapshot.addProperty("success", true); //$NON-NLS-1$
+                    snapshot.addProperty("snapshotMarker", snapshotCounter.incrementAndGet()); //$NON-NLS-1$
+                    return snapshot;
+                }, 1, 1L)).getAsJsonObject();
+
+        assertTrue(result.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertEquals(2, result.getAsJsonObject("latestLaunchSnapshot") //$NON-NLS-1$
+                .get("snapshotMarker").getAsInt()); //$NON-NLS-1$
+    }
+
+    @Test
+    public void testTerminateReportsProcessIdsMethodAndFinalState()
+    {
+        ILaunch launch = launch("ProjectA", "ApplicationA", true, false, //$NON-NLS-1$ //$NON-NLS-2$
+                new IProcess[] { process("1cv8c /DEBUGGERURL tcp://127.0.0.1:1560", "4242") }, //$NON-NLS-1$ //$NON-NLS-2$
+                new IDebugTarget[0]);
+
+        JsonObject result = JsonParser.parseString(RuntimeDebugLaunchLifecycleBridge.terminateLaunch(
+                new ILaunch[] { launch }, "ProjectA", "ApplicationA", "")) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                .getAsJsonObject();
+
+        assertTrue(result.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertEquals("eclipse_ITerminate", result.get("terminationMethod").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertTrue(result.getAsJsonArray("processIds").toString().contains("4242")); //$NON-NLS-1$ //$NON-NLS-2$
+        assertTrue(result.getAsJsonArray("terminatedElements").toString().contains("4242")); //$NON-NLS-1$ //$NON-NLS-2$
+        assertEquals("terminated", result.getAsJsonObject("finalObservedState") //$NON-NLS-1$ //$NON-NLS-2$
+                .get("state").getAsString()); //$NON-NLS-1$
+    }
+
+    @Test
+    public void testLaunchIdSurvivesDiagnosticRefreshForSameLaunch()
+    {
+        ILaunch launch = launch("ProjectA", "ApplicationA", true, false, new IProcess[0], //$NON-NLS-1$ //$NON-NLS-2$
+                new IDebugTarget[0]);
+        JsonObject firstSnapshot = RuntimeDebugLaunchLifecycleBridge.snapshotLaunches(new ILaunch[] { launch },
+                "ProjectA", "ApplicationA"); //$NON-NLS-1$ //$NON-NLS-2$
+        String launchId = firstSnapshot.getAsJsonArray("launches").get(0).getAsJsonObject() //$NON-NLS-1$
+                .get("launchId").getAsString(); //$NON-NLS-1$
+        RuntimeDebugLaunchLifecycleBridge.snapshotLaunches(new ILaunch[] { launch },
+                "ProjectA", "ApplicationA"); //$NON-NLS-1$ //$NON-NLS-2$
+
+        JsonObject result = JsonParser.parseString(RuntimeDebugLaunchLifecycleBridge.terminateLaunch(
+                new ILaunch[] { launch }, "ProjectA", "ApplicationA", launchId)) //$NON-NLS-1$ //$NON-NLS-2$
+                .getAsJsonObject();
+
+        assertTrue(result.get("success").getAsBoolean()); //$NON-NLS-1$
+        assertEquals(launchId, result.get("launchId").getAsString()); //$NON-NLS-1$
     }
 
     @Test
@@ -236,6 +340,7 @@ public class RuntimeDebugLaunchLifecycleBridgeTest
         Map<String, String> attributes = new HashMap<>();
         attributes.put(IProcess.ATTR_CMDLINE, commandLine);
         attributes.put(IProcess.ATTR_PROCESS_ID, pid);
+        AtomicBoolean terminatedState = new AtomicBoolean(false);
         return proxy(IProcess.class, (method, args) -> {
             String name = method.getName();
             if ("getLabel".equals(name)) //$NON-NLS-1$
@@ -248,11 +353,16 @@ public class RuntimeDebugLaunchLifecycleBridgeTest
             }
             if ("isTerminated".equals(name)) //$NON-NLS-1$
             {
-                return false;
+                return terminatedState.get();
             }
             if ("canTerminate".equals(name)) //$NON-NLS-1$
             {
-                return true;
+                return !terminatedState.get();
+            }
+            if ("terminate".equals(name)) //$NON-NLS-1$
+            {
+                terminatedState.set(true);
+                return null;
             }
             return defaultValue(method.getReturnType());
         });

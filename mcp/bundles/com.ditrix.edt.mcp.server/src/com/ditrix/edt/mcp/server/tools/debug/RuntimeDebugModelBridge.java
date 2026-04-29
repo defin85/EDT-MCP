@@ -123,7 +123,8 @@ public final class RuntimeDebugModelBridge
         {
             JsonObject launchDiagnostics = RuntimeDebugLaunchLifecycleBridge.snapshotLaunches(projectFilter,
                     applicationFilter);
-            result.put("unsupportedLaunches", launchDiagnostics.get("unsupportedLaunches")) //$NON-NLS-1$ //$NON-NLS-2$
+            result.put("unsupportedLaunches", //$NON-NLS-1$
+                    RuntimeDebugLaunchLifecycleBridge.unsupportedLaunchesForSessionDiagnostics(launchDiagnostics))
                     .put("filteredLaunches", launchDiagnostics.get("filteredLaunches")) //$NON-NLS-1$ //$NON-NLS-2$
                     .put("launchDiagnostics", launchDiagnostics); //$NON-NLS-1$
         }

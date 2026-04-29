@@ -344,8 +344,8 @@ public class DebugLaunchTool implements IMcpTool
             launchResult.addProperty("applicationId", applicationId); //$NON-NLS-1$
             launchResult.addProperty("launchConfiguration", configName); //$NON-NLS-1$
             launchResult.addProperty("mode", "debug"); //$NON-NLS-1$ //$NON-NLS-2$
-            launchResult.add("latestLaunchSnapshot", RuntimeDebugLaunchLifecycleBridge //$NON-NLS-1$
-                    .snapshotLaunches(projectName, applicationId));
+            RuntimeDebugLaunchLifecycleBridge.enrichLaunchResult(launchResult,
+                    RuntimeDebugLaunchLifecycleBridge.snapshotLaunches(projectName, applicationId));
             if (launchResult.has("success") && launchResult.get("success").getAsBoolean()) //$NON-NLS-1$ //$NON-NLS-2$
             {
                 launchResult.addProperty("message", //$NON-NLS-1$

@@ -169,6 +169,7 @@ public final class RuntimeDebugLaunchLifecycleBridge
             if (sessions.has("success") && sessions.get("success").getAsBoolean() //$NON-NLS-1$ //$NON-NLS-2$
                     && sessions.has("count") && sessions.get("count").getAsInt() > 0) //$NON-NLS-1$ //$NON-NLS-2$
             {
+                latestLaunchSnapshot = launchSnapshotSupplier.get();
                 sessions.addProperty("outcome", "supported_session_visible"); //$NON-NLS-1$ //$NON-NLS-2$
                 sessions.addProperty("phase", "supported_thread_visible"); //$NON-NLS-1$ //$NON-NLS-2$
                 sessions.addProperty("timedOut", false); //$NON-NLS-1$
@@ -310,6 +311,13 @@ public final class RuntimeDebugLaunchLifecycleBridge
                         .put("reason", "stale_launch_id") //$NON-NLS-1$ //$NON-NLS-2$
                         .toJson();
             }
+            if (!isLaunchKnownToManager(launch))
+            {
+                LAUNCHES.remove(launchId);
+                return ToolResult.error("Unknown or stale launchId: " + launchId) //$NON-NLS-1$
+                        .put("reason", "stale_launch_id") //$NON-NLS-1$ //$NON-NLS-2$
+                        .toJson();
+            }
             if (!matchesLaunchIdentity(launch, projectName, applicationId))
             {
                 return ToolResult.error("launchId does not match requested project/application") //$NON-NLS-1$
@@ -395,7 +403,6 @@ public final class RuntimeDebugLaunchLifecycleBridge
         JsonArray unsupportedLaunches = new JsonArray();
         JsonArray filteredLaunches = new JsonArray();
 
-        LAUNCHES.clear();
         for (int i = 0; i < launches.length; i++)
         {
             LaunchClassification classification = classify(launches[i], projectFilter, applicationFilter,
@@ -500,7 +507,7 @@ public final class RuntimeDebugLaunchLifecycleBridge
             unsupportedReasons.add("supported_thread_unavailable"); //$NON-NLS-1$
         }
 
-        String launchId = launchId(snapshotId, index, projectName, applicationId, configurationName, launch);
+        String launchId = launchId(projectName, applicationId, configurationName, launch);
         JsonObject object = new JsonObject();
         object.addProperty("launchId", launchId); //$NON-NLS-1$
         object.addProperty("snapshotId", snapshotId); //$NON-NLS-1$
@@ -676,6 +683,7 @@ public final class RuntimeDebugLaunchLifecycleBridge
         JsonArray terminated = new JsonArray();
         JsonArray skipped = new JsonArray();
         JsonArray failed = new JsonArray();
+        JsonArray processIds = processIds(launch);
 
         terminateElement("launch", launchId, launch, terminated, skipped, failed); //$NON-NLS-1$
         int processIndex = 0;
@@ -692,15 +700,19 @@ public final class RuntimeDebugLaunchLifecycleBridge
         }
 
         boolean hasFailure = failed.size() > 0;
+        JsonObject latestLaunchSnapshot = snapshotLaunches(projectName, applicationId);
         return ToolResult.success()
                 .put("terminated", !hasFailure && terminated.size() > 0) //$NON-NLS-1$
                 .put("launchId", launchId) //$NON-NLS-1$
                 .put("projectName", projectName) //$NON-NLS-1$
                 .put("applicationId", applicationId) //$NON-NLS-1$
+                .put("terminationMethod", "eclipse_ITerminate") //$NON-NLS-1$ //$NON-NLS-2$
+                .put("processIds", processIds) //$NON-NLS-1$
                 .put("terminatedElements", terminated) //$NON-NLS-1$
                 .put("skippedElements", skipped) //$NON-NLS-1$
                 .put("failedElements", failed) //$NON-NLS-1$
-                .put("latestLaunchSnapshot", snapshotLaunches(projectName, applicationId)) //$NON-NLS-1$
+                .put("finalObservedState", finalObservedState(latestLaunchSnapshot, launch)) //$NON-NLS-1$
+                .put("latestLaunchSnapshot", latestLaunchSnapshot) //$NON-NLS-1$
                 .toJson();
     }
 
@@ -711,6 +723,15 @@ public final class RuntimeDebugLaunchLifecycleBridge
         object.addProperty("kind", kind); //$NON-NLS-1$
         object.addProperty("id", id); //$NON-NLS-1$
         object.addProperty("className", terminate.getClass().getName()); //$NON-NLS-1$
+        object.addProperty("terminationMethod", "eclipse_ITerminate"); //$NON-NLS-1$ //$NON-NLS-2$
+        if (terminate instanceof IProcess)
+        {
+            String pid = safeProcessAttribute((IProcess)terminate, IProcess.ATTR_PROCESS_ID);
+            if (!pid.isEmpty())
+            {
+                object.addProperty("pid", pid); //$NON-NLS-1$
+            }
+        }
         try
         {
             if (terminate.isTerminated())
@@ -760,6 +781,23 @@ public final class RuntimeDebugLaunchLifecycleBridge
         }
     }
 
+    private static boolean isLaunchKnownToManager(ILaunch launch)
+    {
+        ILaunchManager launchManager = getLaunchManager();
+        if (launchManager == null)
+        {
+            return false;
+        }
+        for (ILaunch currentLaunch : launchManager.getLaunches())
+        {
+            if (currentLaunch == launch)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static JsonObject acceptedLaunchObject(String outcome, int timeoutSeconds)
     {
         JsonObject object = new JsonObject();
@@ -769,6 +807,54 @@ public final class RuntimeDebugLaunchLifecycleBridge
         object.addProperty("phase", "launch_config_started"); //$NON-NLS-1$ //$NON-NLS-2$
         object.addProperty("timeoutSeconds", timeoutSeconds); //$NON-NLS-1$
         return object;
+    }
+
+    public static void enrichLaunchResult(JsonObject launchResult, JsonObject latestLaunchSnapshot)
+    {
+        JsonObject launch = firstLaunch(latestLaunchSnapshot);
+        JsonObject phases = launch.has("lifecycle") //$NON-NLS-1$
+                ? launch.getAsJsonObject("lifecycle").deepCopy() //$NON-NLS-1$
+                : defaultLaunchPhases(isAccepted(launchResult));
+        launchResult.add("phases", phases); //$NON-NLS-1$
+        launchResult.add("launch", launch.deepCopy()); //$NON-NLS-1$
+        if (!launchResult.has("operatorChoices")) //$NON-NLS-1$
+        {
+            launchResult.add("operatorChoices", acceptedLaunchChoices()); //$NON-NLS-1$
+        }
+        launchResult.add("latestLaunchSnapshot", latestLaunchSnapshot); //$NON-NLS-1$
+    }
+
+    static JsonArray unsupportedLaunchesForSessionDiagnostics(JsonObject launchDiagnostics)
+    {
+        JsonArray diagnostics = new JsonArray();
+        if (launchDiagnostics == null)
+        {
+            return diagnostics;
+        }
+        JsonArray unsupported = launchDiagnostics.has("unsupportedLaunches") //$NON-NLS-1$
+                ? launchDiagnostics.getAsJsonArray("unsupportedLaunches") //$NON-NLS-1$
+                : new JsonArray();
+        for (JsonElement element : unsupported)
+        {
+            diagnostics.add(element.deepCopy());
+        }
+
+        JsonArray launches = launchDiagnostics.has("launches") //$NON-NLS-1$
+                ? launchDiagnostics.getAsJsonArray("launches") //$NON-NLS-1$
+                : new JsonArray();
+        for (JsonElement element : launches)
+        {
+            JsonObject launch = element.getAsJsonObject();
+            boolean supported = launch.has("supported") && launch.get("supported").getAsBoolean(); //$NON-NLS-1$ //$NON-NLS-2$
+            JsonArray reasons = launch.has("unsupportedReasons") //$NON-NLS-1$
+                    ? launch.getAsJsonArray("unsupportedReasons") //$NON-NLS-1$
+                    : new JsonArray();
+            if (!supported || reasons.size() > 0)
+            {
+                diagnostics.add(launch.deepCopy());
+            }
+        }
+        return diagnostics;
     }
 
     private static boolean isActiveLaunch(JsonObject launch)
@@ -806,6 +892,70 @@ public final class RuntimeDebugLaunchLifecycleBridge
             }
         }
         return false;
+    }
+
+    private static JsonObject firstLaunch(JsonObject snapshot)
+    {
+        if (snapshot != null && snapshot.has("launches")) //$NON-NLS-1$
+        {
+            JsonArray launches = snapshot.getAsJsonArray("launches"); //$NON-NLS-1$
+            if (launches.size() > 0)
+            {
+                return launches.get(0).getAsJsonObject();
+            }
+        }
+        return new JsonObject();
+    }
+
+    private static JsonObject defaultLaunchPhases(boolean accepted)
+    {
+        JsonObject phases = new JsonObject();
+        phases.addProperty("launch_config_started", accepted ? "true" : "false"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+        phases.addProperty("runtime_process_started", accepted ? "pending" : "false"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+        phases.addProperty("debug_target_attached", "false"); //$NON-NLS-1$ //$NON-NLS-2$
+        phases.addProperty("supported_thread_visible", "false"); //$NON-NLS-1$ //$NON-NLS-2$
+        return phases;
+    }
+
+    private static boolean isAccepted(JsonObject launchResult)
+    {
+        return launchResult.has("accepted") && launchResult.get("accepted").getAsBoolean(); //$NON-NLS-1$ //$NON-NLS-2$
+    }
+
+    private static JsonObject finalObservedState(JsonObject latestLaunchSnapshot, ILaunch selectedLaunch)
+    {
+        JsonObject object = new JsonObject();
+        JsonObject launch = firstLaunch(latestLaunchSnapshot);
+        if (launch.entrySet().isEmpty())
+        {
+            object.addProperty("visible", false); //$NON-NLS-1$
+            object.addProperty("state", stateOf(selectedLaunch)); //$NON-NLS-1$
+            object.addProperty("source", "selected_launch_after_termination"); //$NON-NLS-1$ //$NON-NLS-2$
+            return object;
+        }
+        object.addProperty("visible", true); //$NON-NLS-1$
+        object.addProperty("state", stringProperty(launch, "state")); //$NON-NLS-1$ //$NON-NLS-2$
+        object.addProperty("source", "latest_launch_snapshot"); //$NON-NLS-1$ //$NON-NLS-2$
+        if (launch.has("lifecycle")) //$NON-NLS-1$
+        {
+            object.add("lifecycle", launch.getAsJsonObject("lifecycle").deepCopy()); //$NON-NLS-1$ //$NON-NLS-2$
+        }
+        object.add("launch", launch.deepCopy()); //$NON-NLS-1$
+        return object;
+    }
+
+    private static JsonArray processIds(ILaunch launch)
+    {
+        JsonArray processIds = new JsonArray();
+        for (IProcess process : launch.getProcesses())
+        {
+            String pid = safeProcessAttribute(process, IProcess.ATTR_PROCESS_ID);
+            if (!pid.isEmpty())
+            {
+                processIds.add(pid);
+            }
+        }
+        return processIds;
     }
 
     private static void addAttribute(JsonObject object, String property, IProcess process, String attribute)
@@ -984,6 +1134,15 @@ public final class RuntimeDebugLaunchLifecycleBridge
         return choices;
     }
 
+    private static JsonArray acceptedLaunchChoices()
+    {
+        JsonArray choices = new JsonArray();
+        choices.add("list_debug_sessions"); //$NON-NLS-1$
+        choices.add("wait_debug_session"); //$NON-NLS-1$
+        choices.add("list_debug_launches"); //$NON-NLS-1$
+        return choices;
+    }
+
     private static JsonArray relatedDuplicateReasons()
     {
         JsonArray reasons = new JsonArray();
@@ -1078,11 +1237,9 @@ public final class RuntimeDebugLaunchLifecycleBridge
         }
     }
 
-    private static String launchId(String snapshotId, int index, String projectName, String applicationId,
-            String configurationName, ILaunch launch)
+    private static String launchId(String projectName, String applicationId, String configurationName, ILaunch launch)
     {
-        return opaqueId("launch", snapshotId, Integer.toString(index), projectName, applicationId, //$NON-NLS-1$
-                configurationName, launch.getLaunchMode(), launch);
+        return opaqueId("launch", projectName, applicationId, configurationName, launch.getLaunchMode(), launch); //$NON-NLS-1$
     }
 
     private static String opaqueId(String prefix, Object... parts)

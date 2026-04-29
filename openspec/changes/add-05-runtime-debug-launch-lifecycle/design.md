@@ -39,8 +39,9 @@ bounded `run_to_debug_breakpoint`. Этот слой начинается пос
     возвращать краткие `unsupportedLaunches`/`filteredLaunches`, чтобы оператор не попадал в
     пустоту.
   - `list_debug_launches` is also the source of `launchId` values for later targeted cleanup.
-    `launchId` values are valid only for the current EDT workspace/runtime snapshot; clients must
-    refresh them after EDT restart or workspace reload.
+    `launchId` values are stable across diagnostic refreshes for the same Eclipse launch inside the
+    current MCP/EDT runtime; clients must refresh them after EDT restart, workspace reload, MCP server
+    restart, or `stale_launch_id`.
 
 - Decision: считать `debug_launch` успешным только на уровне честно достигнутых фаз.
   - Response сохраняет `success=true` для backward-compatible accepted launch, но возвращает
@@ -156,9 +157,19 @@ summary with `filterReasons`, for example `projectName_mismatch` or `application
   "success": true,
   "accepted": true,
   "phase": "launch_config_started",
-  "phases": {},
+  "phases": {
+    "launch_config_started": "true",
+    "runtime_process_started": "pending",
+    "debug_target_attached": "false",
+    "supported_thread_visible": "false"
+  },
   "launch": {},
-  "operatorChoices": []
+  "operatorChoices": [
+    "list_debug_sessions",
+    "wait_debug_session",
+    "list_debug_launches"
+  ],
+  "latestLaunchSnapshot": {}
 }
 ```
 
@@ -180,10 +191,13 @@ If duplicate preflight blocks a launch, the response is fail-closed:
 ```
 
 `wait_debug_session(projectName, applicationId, timeoutSeconds)` returns either a supported session
-snapshot compatible with `list_debug_sessions` or `success=false` with the latest launch snapshot and
-reason `debug_session_wait_timeout`. `terminate_debug_launch(projectName, applicationId, launchId?)`
-returns `terminated=true` only for launches terminated through Eclipse `ITerminate`; ambiguity returns
-`multiple_matching_launches` and the matching `launchId` values.
+snapshot compatible with `list_debug_sessions` plus the latest launch snapshot, or `success=false` with
+the latest launch snapshot and reason `debug_session_wait_timeout`.
+`terminate_debug_launch(projectName, applicationId, launchId?)` returns `terminated=true` only for
+launches terminated through Eclipse `ITerminate`; the success payload includes `terminationMethod`,
+`processIds` when Eclipse exposes them, per-element termination details, `finalObservedState`, and
+`latestLaunchSnapshot`. Ambiguity returns `multiple_matching_launches` and the matching `launchId`
+values.
 
 ## EDT Launch/Process API Discovery
 
@@ -220,10 +234,12 @@ A launch is a duplicate candidate only when all of these facts match:
 different applications with colliding or stale identifiers. `projectName` alone is also insufficient
 because a project can have multiple runtime applications.
 
-`launchId` is an opaque handle derived from the current launch snapshot and index. It is valid only
-for the current EDT workspace/runtime process and only until the next snapshot invalidates the bridge
-cache. Clients must refresh via `list_debug_launches` after EDT restart, workspace reload, MCP server
-restart, or `stale_launch_id`.
+`launchId` is an opaque handle derived from launch identity, project/application identity and launch
+configuration identity. It is valid only for the current EDT workspace/runtime process, but remains
+stable across diagnostic refreshes for the same Eclipse launch so an operator can inspect
+`list_debug_sessions` or `wait_debug_session` before calling `terminate_debug_launch`. Clients must
+refresh via `list_debug_launches` after EDT restart, workspace reload, MCP server restart, or
+`stale_launch_id`.
 
 ## Risks / Trade-offs
 

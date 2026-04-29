@@ -65,7 +65,7 @@ public class McpResourceRegistry
                         "1. `get_applications` discovers the target application.",
                         "2. `set_debug_breakpoint` creates or reuses an MCP-owned BSL line breakpoint.",
                         "3. `debug_launch` starts the EDT runtime in debug mode for the target application and returns phase evidence.",
-                        "4. `list_debug_launches` inspects RuntimeClient launch/process lifecycle and returns snapshot-local `launchId` values.",
+                        "4. `list_debug_launches` inspects RuntimeClient launch/process lifecycle and returns current-runtime `launchId` values that stay stable across diagnostic refreshes.",
                         "5. `wait_debug_session` waits boundedly until a supported session/thread is visible.",
                         "6. `list_debug_sessions` discovers active supported sessions and returns `sessionId` and `threadId` values.",
                         "7. `get_debug_stack` reads suspended stack frames by `threadId` and returns `frameId` values.",
@@ -132,7 +132,7 @@ public class McpResourceRegistry
                         "## Safety rules",
                         "",
                         "`debug_launch` refuses duplicate RuntimeClient clients for the same `projectName`/`applicationId`; use list/wait/terminate/manual cleanup operator choices.",
-                        "`launchId` values from `list_debug_launches` are snapshot-local and must be refreshed after EDT/workspace/MCP restart.",
+                        "`launchId` values from `list_debug_launches` are current-runtime handles and must be refreshed after EDT/workspace/MCP restart or `stale_launch_id`.",
                         "Default cleanup protects pre-existing user breakpoints. Removing a non-owned user breakpoint requires the explicit override accepted by `remove_debug_breakpoint`.",
                         "Expression evaluation can be observable in the runtime; do not treat it as a read-only proof surface.")));
 

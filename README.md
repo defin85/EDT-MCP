@@ -1015,6 +1015,7 @@ Warm-session states are `starting`, `ready`, `busy`, `stale`, and `dead`. Stale 
 - `updateBeforeLaunch=true` skips update if database is already up to date
 - `debug_launch` is sync-first but bounded: it does not use unbounded `Display.syncExec`
 - `success=true` means the launch request was accepted. Use `wait_debug_session` or `list_debug_sessions` to prove `supported_thread_visible=true`
+- Responses include `phases`, `launch`, and `latestLaunchSnapshot`; if the launch is accepted but no RuntimeClient launch is visible yet, `runtime_process_started=pending` and `supported_thread_visible=false`
 - Duplicate runtime clients fail closed with `reason=debug_launch_already_running` and operator choices to reuse, wait, terminate, or clean up manually
 
 #### Runtime Debug Control Tools
@@ -1027,9 +1028,9 @@ Warm-session states are `starting`, `ready`, `busy`, `stale`, and `dead`. Stale 
 | `projectName` | No | Optional EDT project name filter |
 | `applicationId` | No | Optional application ID filter |
 
-`launchId` values are snapshot-local opaque handles. Refresh them with `list_debug_launches` after EDT restart, workspace reload, MCP server restart, or `stale_launch_id`.
+`launchId` values are opaque handles for the current MCP/EDT runtime and remain stable across diagnostic refreshes for the same Eclipse launch. Refresh them with `list_debug_launches` after EDT restart, workspace reload, MCP server restart, or `stale_launch_id`.
 
-**`list_debug_sessions`** - List active supported EDT runtime debug sessions. A supported session is an active Eclipse debug launch with launch type `com._1c.g5.v8.dt.launching.core.RuntimeClient`, resolvable EDT project/application attributes, and Eclipse debug model elements. When `count=0`, the response may include `unsupportedLaunches`, `filteredLaunches`, and `launchDiagnostics` so an existing process does not look like a blind empty result.
+**`list_debug_sessions`** - List active supported EDT runtime debug sessions. A supported session is an active Eclipse debug launch with launch type `com._1c.g5.v8.dt.launching.core.RuntimeClient`, resolvable EDT project/application attributes, and Eclipse debug model elements. When `count=0`, the response includes top-level `unsupportedLaunches` for unready RuntimeClient launches (`supported=false` with reasons), `filteredLaunches` for filter mismatches, and full `launchDiagnostics` so an existing process does not look like a blind empty result.
 
 **Parameters:**
 | Parameter | Required | Description |
@@ -1046,9 +1047,9 @@ Warm-session states are `starting`, `ready`, `busy`, `stale`, and `dead`. Stale 
 | `applicationId` | Yes | Application ID from `get_applications` |
 | `timeoutSeconds` | No | Bounded wait timeout (default 30, max 300) |
 
-Timeout responses include the latest launch lifecycle diagnostics and do not leave a background poller running.
+Success and timeout responses include the latest launch lifecycle diagnostics and do not leave a background poller running.
 
-**`terminate_debug_launch`** - Terminate a matching RuntimeClient debug launch using Eclipse `ILaunch`/`IProcess`/`IDebugTarget` termination only.
+**`terminate_debug_launch`** - Terminate a matching RuntimeClient debug launch using Eclipse `ILaunch`/`IProcess`/`IDebugTarget` termination only. Responses include `launchId`, `terminationMethod=eclipse_ITerminate`, `processIds` when Eclipse exposes them, per-element termination/skipped/failure details, `finalObservedState`, and `latestLaunchSnapshot`.
 
 **Parameters:**
 | Parameter | Required | Description |

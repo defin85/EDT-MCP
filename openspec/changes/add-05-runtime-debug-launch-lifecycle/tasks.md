@@ -65,3 +65,22 @@
       `debug_launch` and `list_debug_sessions` from this change area; new source tools
       `list_debug_launches`, `wait_debug_session`, and `terminate_debug_launch` are not installed
       there yet. Live smoke is blocked at installed runtime surface before launch/attach phases.
+
+## 6. Finish-To-100 Closure
+
+- [x] 6.1 Align `debug_launch` with the documented public response schema: accepted responses now
+      include top-level `phases`, `launch`, `operatorChoices`, and `latestLaunchSnapshot`.
+- [x] 6.2 Ensure `list_debug_sessions count=0` exposes unready RuntimeClient launches in top-level
+      `unsupportedLaunches` with explicit unsupported reasons, not only inside nested diagnostics.
+- [x] 6.3 Ensure successful `wait_debug_session` returns a fresh final launch snapshot.
+- [x] 6.4 Ensure `terminate_debug_launch` reports `terminationMethod`, known process IDs, per-element
+      termination details, and final observed state.
+- [x] 6.5 Stabilize `launchId` across diagnostic refreshes for the same Eclipse launch in the current
+      MCP/EDT runtime.
+- [x] 6.6 Add regression tests for the finish-to-100 contracts and run the focused Tycho gate:
+      `mvn -f mcp/pom.xml -pl bundles/com.ditrix.edt.mcp.server,tests/com.ditrix.edt.mcp.server.tests -am -Dtest=RuntimeDebugLaunchLifecycleBridgeTest verify --batch-mode --no-transfer-progress`
+      passed with 11 tests.
+- [x] 6.7 Run the broader relevant verification set after docs and Beads closure:
+      `mvn -f mcp/pom.xml -pl bundles/com.ditrix.edt.mcp.server,tests/com.ditrix.edt.mcp.server.tests -am verify --batch-mode --no-transfer-progress`
+      passed with 639 tests; `openspec validate add-05-runtime-debug-launch-lifecycle --strict --no-interactive`
+      and `scripts/verify_agent_surface.sh` also passed.
