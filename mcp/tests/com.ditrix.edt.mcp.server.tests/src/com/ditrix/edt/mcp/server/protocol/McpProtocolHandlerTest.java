@@ -493,10 +493,9 @@ public class McpProtocolHandlerTest
 
         JsonObject json = parseResponse(response);
         JsonObject result = json.getAsJsonObject("result"); //$NON-NLS-1$
-        assertNotNull(result);
-        assertTrue(result.has("task")); //$NON-NLS-1$
+        JsonObject structured = assertTaskAcceptedToolCallResult(result, UpdateDatabaseTool.NAME);
 
-        String taskId = result.getAsJsonObject("task").get("taskId").getAsString(); //$NON-NLS-1$ //$NON-NLS-2$
+        String taskId = structured.getAsJsonObject("task").get("taskId").getAsString(); //$NON-NLS-1$ //$NON-NLS-2$
         String getRequest = buildJsonRpcRequest(2, "tasks/get", "{\"taskId\":\"" + taskId + "\"}"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
         JsonObject ownSession = parseResponse(handler.processRequest(getRequest, "session-1", false, "json")); //$NON-NLS-1$ //$NON-NLS-2$
         assertEquals(taskId, ownSession.getAsJsonObject("result").get("taskId").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
@@ -529,8 +528,7 @@ public class McpProtocolHandlerTest
 
         JsonObject json = parseResponse(response);
         JsonObject result = json.getAsJsonObject("result"); //$NON-NLS-1$
-        assertNotNull(result);
-        assertTrue(result.has("task")); //$NON-NLS-1$
+        assertTaskAcceptedToolCallResult(result, ApplyExtensionToInfobaseTool.NAME);
     }
 
     @Test
@@ -546,8 +544,7 @@ public class McpProtocolHandlerTest
 
         JsonObject json = parseResponse(response);
         JsonObject result = json.getAsJsonObject("result"); //$NON-NLS-1$
-        assertNotNull(result);
-        assertTrue(result.has("task")); //$NON-NLS-1$
+        assertTaskAcceptedToolCallResult(result, RunUnitTestsTool.NAME);
     }
 
     @Test
@@ -769,6 +766,24 @@ public class McpProtocolHandlerTest
     private JsonObject parseResponse(String response)
     {
         return JsonParser.parseString(response).getAsJsonObject();
+    }
+
+    private JsonObject assertTaskAcceptedToolCallResult(JsonObject result, String toolName)
+    {
+        assertNotNull(result);
+        assertFalse("Task-backed tools/call must not return a bare task object", result.has("task")); //$NON-NLS-1$ //$NON-NLS-2$
+        assertTrue(result.has("content")); //$NON-NLS-1$
+        JsonObject content = result.getAsJsonArray("content").get(0).getAsJsonObject(); //$NON-NLS-1$
+        assertEquals("text", content.get("type").getAsString()); //$NON-NLS-1$ //$NON-NLS-2$
+        assertTrue(content.get("text").getAsString().contains("Task accepted: " + toolName)); //$NON-NLS-1$ //$NON-NLS-2$
+        assertTrue(result.has("structuredContent")); //$NON-NLS-1$
+        JsonObject structured = result.getAsJsonObject("structuredContent"); //$NON-NLS-1$
+        assertTrue(structured.has("task")); //$NON-NLS-1$
+        assertTrue(structured.has("lifecycle")); //$NON-NLS-1$
+        assertFalse(structured.has("_meta")); //$NON-NLS-1$
+        assertTrue(result.has("_meta")); //$NON-NLS-1$
+        assertTrue(result.getAsJsonObject("_meta").has(McpConstants.META_MODEL_IMMEDIATE_RESPONSE)); //$NON-NLS-1$
+        return structured;
     }
 
     private McpServer createTaskCapableServer() throws Exception

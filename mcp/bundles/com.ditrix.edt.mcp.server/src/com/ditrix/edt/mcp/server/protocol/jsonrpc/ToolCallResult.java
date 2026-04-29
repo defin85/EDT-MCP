@@ -36,8 +36,16 @@ public class ToolCallResult
      */
     public static ToolCallResult json(Object structuredContent)
     {
+        return json(structuredContent, "Done"); //$NON-NLS-1$
+    }
+
+    /**
+     * Creates a JSON content result with structuredContent and custom text.
+     */
+    public static ToolCallResult json(Object structuredContent, String text)
+    {
         ToolCallResult result = new ToolCallResult();
-        result.content.add(ContentItem.text("Done")); //$NON-NLS-1$
+        result.content.add(ContentItem.text(text));
         result.structuredContent = structuredContent;
         return result;
     }

@@ -558,10 +558,11 @@ public class McpProtocolHandler
             return buildErrorResponse(McpConstants.ERROR_INTERNAL, e.getMessage(), requestId);
         }
 
+        String immediateResponse = "Task accepted: " + tool.getName() + " (" + task.getTaskId() + ")"; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
         CreateTaskResult result = new CreateTaskResult(task);
-        result.putMeta(McpConstants.META_MODEL_IMMEDIATE_RESPONSE,
-                "Task accepted: " + tool.getName() + " (" + task.getTaskId() + ")"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-        return GsonProvider.toJson(JsonRpcResponse.success(requestId, result));
+        result.putMeta(McpConstants.META_MODEL_IMMEDIATE_RESPONSE, immediateResponse);
+        JsonElement payload = buildToolCallJsonPayload(GsonProvider.get().toJsonTree(result), immediateResponse);
+        return GsonProvider.toJson(JsonRpcResponse.success(requestId, payload));
     }
 
     private void executeTaskToolCall(TaskRecord task, IMcpTool tool, JsonRpcRequest request, Object requestId,
@@ -641,9 +642,13 @@ public class McpProtocolHandler
 
     private JsonElement buildToolCallJsonPayload(String jsonResult)
     {
-        JsonElement structured = JsonParser.parseString(jsonResult);
+        return buildToolCallJsonPayload(JsonParser.parseString(jsonResult), "Done"); //$NON-NLS-1$
+    }
+
+    private JsonElement buildToolCallJsonPayload(JsonElement structured, String contentText)
+    {
         JsonObject embeddedMeta = extractEmbeddedMeta(structured);
-        JsonObject payload = GsonProvider.get().toJsonTree(ToolCallResult.json(structured)).getAsJsonObject();
+        JsonObject payload = GsonProvider.get().toJsonTree(ToolCallResult.json(structured, contentText)).getAsJsonObject();
         if (embeddedMeta != null && !embeddedMeta.entrySet().isEmpty())
         {
             JsonObject meta = payload.has("_meta") && payload.get("_meta").isJsonObject() //$NON-NLS-1$
