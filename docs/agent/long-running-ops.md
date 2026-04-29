@@ -16,7 +16,9 @@
 
 Текущая async-default волна: `update_database`, `apply_extension_to_infobase`, `run_unit_tests`,
 `clean_project`, и full-project `revalidate_objects`.
-`debug_launch` остаётся sync-first в этом rollout-е.
+`debug_launch` остаётся sync-first, но теперь bounded: launch request не должен зависать на
+неограниченном `Display.syncExec`; готовность supported thread проверяется отдельными
+`wait_debug_session`/`list_debug_sessions`.
 Тяжёлые read-only diagnostics (`get_problem_summary`, `get_project_errors`, `validate_query`) тоже остаются sync-first:
 для них текущая стратегия — contract shaping через summary/filter/limit, а не task enablement.
 
@@ -43,7 +45,10 @@
 - текущий YAxUnit warm bridge использует provider-internal RPC/WebSocket и поддерживает один common-module run за раз; public MCP contract остаётся transport-agnostic
 - тяжёлые diagnostics остаются sync-only и опираются на summary/filter/limit shaping вместо task lifecycle
 - `get_operation_snapshot` даёт exact polling по stable `operationId`, а `get_active_operation` остаётся focused polling fallback с `detached: true` и structured `details`
-- cleanup/discoverability для `debug_launch` вынесены в отдельный runtime-debug-control трек, а не в этот task rollout
+- cleanup/discoverability для `debug_launch` живут в runtime-debug-control: `list_debug_launches`
+  даёт launch/process lifecycle, `wait_debug_session` ждёт supported session, а
+  `terminate_debug_launch` завершает только доказанно matching RuntimeClient launch через Eclipse
+  termination APIs
 
 ## Code Entry Points
 

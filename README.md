@@ -391,8 +391,11 @@ Add to `claude_desktop_config.json`:
 | `get_test_run_report` | Read retained summary, manifest, or JUnit payload for a completed unit-test run by stable `runId` |
 | `get_operation_snapshot` | Get the progress snapshot for a specific tracked long-running operation by `operationId` |
 | `get_active_operation` | Get the current long-running operation progress snapshot for polling fallback |
-| `debug_launch` | Launch application in debug mode (auto-updates database before launch); configuration-only in this rollout |
-| `list_debug_sessions` | List active supported EDT runtime debug sessions and thread summaries |
+| `debug_launch` | Launch application in debug mode with bounded UI invocation, duplicate guard, and phase evidence |
+| `list_debug_launches` | List RuntimeClient debug launches with process metadata, lifecycle phases, and unsupported/filter reasons |
+| `list_debug_sessions` | List active supported EDT runtime debug sessions and thread summaries; includes launch diagnostics when no supported session is visible |
+| `wait_debug_session` | Wait boundedly for a supported debug session matching project/application |
+| `terminate_debug_launch` | Terminate a matching RuntimeClient debug launch through Eclipse launch/process termination only |
 | `list_debug_breakpoints` | List supported EDT BSL line breakpoints visible to the Eclipse breakpoint manager |
 | `set_debug_breakpoint` | Set a supported EDT BSL line breakpoint by project, module path, and 1-based line |
 | `remove_debug_breakpoint` | Remove a supported EDT BSL line breakpoint by MCP `breakpointId`, protecting user breakpoints by default |
@@ -996,7 +999,7 @@ Warm-session states are `starting`, `ready`, `busy`, `stale`, and `dead`. Stale 
 
 #### Debug Launch Tool
 
-**`debug_launch`** - Launch application in debug mode. Automatically updates database before launching and finds existing launch configuration.
+**`debug_launch`** - Launch application in debug mode. Automatically updates database before launching, prevents duplicate RuntimeClient debug clients for the same `projectName`/`applicationId`, and returns launch phase evidence instead of claiming that a supported debug thread is already attached.
 
 **Parameters:**
 | Parameter | Required | Description |
@@ -1004,22 +1007,57 @@ Warm-session states are `starting`, `ready`, `busy`, `stale`, and `dead`. Stale 
 | `projectName` | Yes | EDT project name |
 | `applicationId` | Yes | Application ID from `get_applications` |
 | `updateBeforeLaunch` | No | If true - update database before launching (default: true) |
+| `launchTimeoutSeconds` | No | Bounded UI launch request wait (default 15, max 120) |
 
 **Notes:**
 - Requires a launch configuration to be created in EDT first (Run → Run Configurations...)
 - If no configuration exists, returns list of available configurations
 - `updateBeforeLaunch=true` skips update if database is already up to date
-- `debug_launch` is intentionally sync-first; task-style debug session lifecycle is handled separately from the MCP Tasks rollout
+- `debug_launch` is sync-first but bounded: it does not use unbounded `Display.syncExec`
+- `success=true` means the launch request was accepted. Use `wait_debug_session` or `list_debug_sessions` to prove `supported_thread_visible=true`
+- Duplicate runtime clients fail closed with `reason=debug_launch_already_running` and operator choices to reuse, wait, terminate, or clean up manually
 
 #### Runtime Debug Control Tools
 
-**`list_debug_sessions`** - List active supported EDT runtime debug sessions. A supported session is an active Eclipse debug launch with launch type `com._1c.g5.v8.dt.launching.core.RuntimeClient`, resolvable EDT project/application attributes, and Eclipse debug model elements.
+**`list_debug_launches`** - List launch-level EDT RuntimeClient diagnostics. The response includes launch IDs, launch config identity, lifecycle phases (`launch_config_started`, `runtime_process_started`, `debug_target_attached`, `supported_thread_visible`), sanitized process command-line metadata, `/DEBUGGERURL` presence/value when exposed by Eclipse, debug targets, threads, and unsupported/filter reasons.
 
 **Parameters:**
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `projectName` | No | Optional EDT project name filter |
 | `applicationId` | No | Optional application ID filter |
+
+`launchId` values are snapshot-local opaque handles. Refresh them with `list_debug_launches` after EDT restart, workspace reload, MCP server restart, or `stale_launch_id`.
+
+**`list_debug_sessions`** - List active supported EDT runtime debug sessions. A supported session is an active Eclipse debug launch with launch type `com._1c.g5.v8.dt.launching.core.RuntimeClient`, resolvable EDT project/application attributes, and Eclipse debug model elements. When `count=0`, the response may include `unsupportedLaunches`, `filteredLaunches`, and `launchDiagnostics` so an existing process does not look like a blind empty result.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | No | Optional EDT project name filter |
+| `applicationId` | No | Optional application ID filter |
+
+**`wait_debug_session`** - Wait boundedly for a supported debug session matching `projectName` and `applicationId`.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | EDT project name |
+| `applicationId` | Yes | Application ID from `get_applications` |
+| `timeoutSeconds` | No | Bounded wait timeout (default 30, max 300) |
+
+Timeout responses include the latest launch lifecycle diagnostics and do not leave a background poller running.
+
+**`terminate_debug_launch`** - Terminate a matching RuntimeClient debug launch using Eclipse `ILaunch`/`IProcess`/`IDebugTarget` termination only.
+
+**Parameters:**
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `projectName` | Yes | EDT project name |
+| `applicationId` | Yes | Application ID from `get_applications` |
+| `launchId` | No | Optional launch ID returned by `list_debug_launches`; required when multiple matching launches exist |
+
+The tool refuses unrelated launches and ambiguous matches. It does not kill raw OS PIDs.
 
 **`list_debug_breakpoints`** - List supported EDT BSL line breakpoints visible to the Eclipse breakpoint manager.
 
@@ -1125,6 +1163,16 @@ surface.
 - MCP-created breakpoints are non-persisted by default, carry an MCP ownership marker, and can be removed without deleting pre-existing user breakpoints.
 - `breakpointId` values are stable only within the current EDT workspace session/snapshot cache; refresh with `list_debug_breakpoints` after EDT restart or workspace reload.
 - Conditional breakpoints, hit-count conditions, and value mutation are outside this rollout.
+- 1c-mcp `debug_execute_bsl` does not execute inside the EDT-launched debug client thread and therefore does not trigger EDT breakpoints. Runtime variable checks require code execution inside the debug-launched EDT client/server thread.
+
+**Variables smoke shape:**
+
+1. Set an MCP-owned breakpoint with `set_debug_breakpoint`.
+2. Call `debug_launch` for the target `projectName`/`applicationId`.
+3. Call `wait_debug_session` until a supported `threadId` is visible, or inspect `list_debug_launches` diagnostics on timeout.
+4. Execute the application workflow that reaches the BSL line.
+5. Call `get_debug_stack`, then `get_debug_variables`, then `control_debug_session` with `step_over` when suspended.
+6. Clean up with `remove_debug_breakpoint` or `cleanup_mcp_debug_breakpoints`, and `terminate_debug_launch` when the launched client is no longer needed.
 
 **Live verification command shape:**
 

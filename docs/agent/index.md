@@ -10,7 +10,8 @@
 4. Связь OpenSpec, Beads, CI и runtime: `docs/agent/task-artifacts.md`.
 5. Локальные prerequisites и bootstrap: `docs/agent/codex-setup.md`.
 6. High-friction runtime flow: `docs/agent/long-running-ops.md`.
-7. Generated tool reference: `docs/agent/generated-tool-catalog.md`.
+7. Runtime debug variables smoke: `docs/agent/runtime-debug-smoke.md`.
+8. Generated tool reference: `docs/agent/generated-tool-catalog.md`.
 
 ## Короткая Карта
 

@@ -45,7 +45,9 @@ public class DescribeCapabilitiesTool implements IMcpTool
 
     private static final List<String> RUNTIME_DEBUG_TOOLS = Arrays.asList(
             DebugLaunchTool.NAME,
+            ListDebugLaunchesTool.NAME,
             ListDebugSessionsTool.NAME,
+            WaitDebugSessionTool.NAME,
             ListDebugBreakpointsTool.NAME,
             SetDebugBreakpointTool.NAME,
             RemoveDebugBreakpointTool.NAME,
@@ -54,7 +56,8 @@ public class DescribeCapabilitiesTool implements IMcpTool
             GetDebugVariablesTool.NAME,
             EvaluateDebugExpressionTool.NAME,
             ControlDebugSessionTool.NAME,
-            RunToDebugBreakpointTool.NAME);
+            RunToDebugBreakpointTool.NAME,
+            TerminateDebugLaunchTool.NAME);
 
     private static final List<String> YAXUNIT_TOOLS = Arrays.asList(
             RunUnitTestsTool.NAME,

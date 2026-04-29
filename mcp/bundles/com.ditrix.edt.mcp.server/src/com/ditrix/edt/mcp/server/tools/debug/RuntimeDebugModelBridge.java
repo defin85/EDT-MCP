@@ -115,11 +115,19 @@ public final class RuntimeDebugModelBridge
             sessions.add(toSessionJson(launch, info, sessionId, snapshotId));
         }
 
-        return ToolResult.success()
+        ToolResult result = ToolResult.success()
                 .put("sessions", sessions) //$NON-NLS-1$
                 .put("count", sessions.size()) //$NON-NLS-1$
-                .put("snapshotId", Long.toString(snapshotId)) //$NON-NLS-1$
-                .toJson();
+                .put("snapshotId", Long.toString(snapshotId)); //$NON-NLS-1$
+        if (sessions.size() == 0)
+        {
+            JsonObject launchDiagnostics = RuntimeDebugLaunchLifecycleBridge.snapshotLaunches(projectFilter,
+                    applicationFilter);
+            result.put("unsupportedLaunches", launchDiagnostics.get("unsupportedLaunches")) //$NON-NLS-1$ //$NON-NLS-2$
+                    .put("filteredLaunches", launchDiagnostics.get("filteredLaunches")) //$NON-NLS-1$ //$NON-NLS-2$
+                    .put("launchDiagnostics", launchDiagnostics); //$NON-NLS-1$
+        }
+        return result.toJson();
     }
 
     public static String getStack(String threadId, int requestedMaxFrames)

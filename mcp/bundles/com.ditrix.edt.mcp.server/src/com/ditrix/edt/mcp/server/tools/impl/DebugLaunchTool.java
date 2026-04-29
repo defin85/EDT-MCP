@@ -18,7 +18,6 @@ import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.ILaunchConfiguration;
 import org.eclipse.debug.core.ILaunchConfigurationType;
 import org.eclipse.debug.core.ILaunchManager;
-import org.eclipse.swt.widgets.Display;
 
 import com._1c.g5.v8.dt.platform.services.core.infobases.sync.IInfobaseSynchronizationManager;
 import com._1c.g5.v8.dt.platform.services.core.infobases.sync.InfobaseEqualityState;
@@ -30,6 +29,7 @@ import com.ditrix.edt.mcp.server.protocol.JsonUtils;
 import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
+import com.ditrix.edt.mcp.server.tools.debug.RuntimeDebugLaunchLifecycleBridge;
 import com.ditrix.edt.mcp.server.utils.InfobaseSyncUtils;
 import com.ditrix.edt.mcp.server.utils.ProjectCapabilityFailure;
 import com.ditrix.edt.mcp.server.utils.ProjectStateChecker;
@@ -48,13 +48,6 @@ import com.google.gson.JsonObject;
 public class DebugLaunchTool implements IMcpTool
 {
     public static final String NAME = "debug_launch"; //$NON-NLS-1$
-    
-    /** 1C:EDT launch configuration type ID */
-    private static final String LAUNCH_CONFIG_TYPE_ID = "com._1c.g5.v8.dt.launching.core.RuntimeClient"; //$NON-NLS-1$
-    
-    /** Launch configuration attributes */
-    private static final String ATTR_PROJECT_NAME = "com._1c.g5.v8.dt.debug.core.ATTR_PROJECT_NAME"; //$NON-NLS-1$
-    private static final String ATTR_APPLICATION_ID = "com._1c.g5.v8.dt.debug.core.ATTR_APPLICATION_ID"; //$NON-NLS-1$
     
     @Override
     public String getName()
@@ -86,6 +79,7 @@ public class DebugLaunchTool implements IMcpTool
             .stringProperty("projectName", "EDT project name (required)", true) //$NON-NLS-1$ //$NON-NLS-2$
             .stringProperty("applicationId", "Application ID from get_applications (required)", true) //$NON-NLS-1$ //$NON-NLS-2$
             .booleanProperty("updateBeforeLaunch", "If true - update database before launching (default: true)") //$NON-NLS-1$ //$NON-NLS-2$
+            .integerProperty("launchTimeoutSeconds", "Bounded UI launch request wait (default 15, max 120)") //$NON-NLS-1$ //$NON-NLS-2$
             .build();
     }
     
@@ -101,6 +95,7 @@ public class DebugLaunchTool implements IMcpTool
         String projectName = JsonUtils.extractStringArgument(params, "projectName"); //$NON-NLS-1$
         String applicationId = JsonUtils.extractStringArgument(params, "applicationId"); //$NON-NLS-1$
         boolean updateBeforeLaunch = JsonUtils.extractBooleanArgument(params, "updateBeforeLaunch", true); //$NON-NLS-1$
+        int launchTimeoutSeconds = JsonUtils.extractIntArgument(params, "launchTimeoutSeconds", 0); //$NON-NLS-1$
         
         // Validate required parameters
         if (projectName == null || projectName.isEmpty())
@@ -128,7 +123,7 @@ public class DebugLaunchTool implements IMcpTool
             return notReadyResult.toJson();
         }
         
-        return launchDebug(projectName, applicationId, updateBeforeLaunch);
+        return launchDebug(projectName, applicationId, updateBeforeLaunch, launchTimeoutSeconds);
     }
     
     /**
@@ -139,7 +134,8 @@ public class DebugLaunchTool implements IMcpTool
      * @param updateBeforeLaunch whether to update database before launching
      * @return JSON string with result
      */
-    private String launchDebug(String projectName, String applicationId, boolean updateBeforeLaunch)
+    private String launchDebug(String projectName, String applicationId, boolean updateBeforeLaunch,
+            int launchTimeoutSeconds)
     {
         try
         {
@@ -181,6 +177,13 @@ public class DebugLaunchTool implements IMcpTool
                     Activator.logError("Error checking application", e); //$NON-NLS-1$
                     // Continue - we'll try to find launch config anyway
                 }
+            }
+
+            JsonObject duplicatePreflight = RuntimeDebugLaunchLifecycleBridge.duplicateLaunchPreflight(projectName,
+                    applicationId);
+            if (!duplicatePreflight.get("success").getAsBoolean()) //$NON-NLS-1$
+            {
+                return duplicatePreflight.toString();
             }
             
             // Update database before launch if requested
@@ -243,10 +246,12 @@ public class DebugLaunchTool implements IMcpTool
             }
             
             // Get launch configuration type
-            ILaunchConfigurationType configType = launchManager.getLaunchConfigurationType(LAUNCH_CONFIG_TYPE_ID);
+            ILaunchConfigurationType configType = launchManager.getLaunchConfigurationType(
+                    RuntimeDebugLaunchLifecycleBridge.RUNTIME_CLIENT_LAUNCH_CONFIG_TYPE_ID);
             if (configType == null)
             {
-                return ToolResult.error("Launch configuration type not found: " + LAUNCH_CONFIG_TYPE_ID).toJson(); //$NON-NLS-1$
+                return ToolResult.error("Launch configuration type not found: " //$NON-NLS-1$
+                        + RuntimeDebugLaunchLifecycleBridge.RUNTIME_CLIENT_LAUNCH_CONFIG_TYPE_ID).toJson();
             }
             
             // Find matching launch configurations
@@ -257,8 +262,10 @@ public class DebugLaunchTool implements IMcpTool
             {
                 try
                 {
-                    String configProject = config.getAttribute(ATTR_PROJECT_NAME, ""); //$NON-NLS-1$
-                    String configAppId = config.getAttribute(ATTR_APPLICATION_ID, ""); //$NON-NLS-1$
+                    String configProject = config.getAttribute(RuntimeDebugLaunchLifecycleBridge.ATTR_PROJECT_NAME,
+                            ""); //$NON-NLS-1$
+                    String configAppId = config.getAttribute(RuntimeDebugLaunchLifecycleBridge.ATTR_APPLICATION_ID,
+                            ""); //$NON-NLS-1$
                     
                     if (projectName.equals(configProject) && applicationId.equals(configAppId))
                     {
@@ -279,7 +286,8 @@ public class DebugLaunchTool implements IMcpTool
                 {
                     try
                     {
-                        String configProject = config.getAttribute(ATTR_PROJECT_NAME, ""); //$NON-NLS-1$
+                        String configProject = config.getAttribute(RuntimeDebugLaunchLifecycleBridge.ATTR_PROJECT_NAME,
+                                ""); //$NON-NLS-1$
                         if (projectName.equals(configProject))
                         {
                             matchingConfig = config;
@@ -303,8 +311,10 @@ public class DebugLaunchTool implements IMcpTool
                     {
                         JsonObject configObj = new JsonObject();
                         configObj.addProperty("name", config.getName()); //$NON-NLS-1$
-                        configObj.addProperty("project", config.getAttribute(ATTR_PROJECT_NAME, "")); //$NON-NLS-1$ //$NON-NLS-2$
-                        configObj.addProperty("applicationId", config.getAttribute(ATTR_APPLICATION_ID, "")); //$NON-NLS-1$ //$NON-NLS-2$
+                        configObj.addProperty("project", config.getAttribute( //$NON-NLS-1$
+                                RuntimeDebugLaunchLifecycleBridge.ATTR_PROJECT_NAME, "")); //$NON-NLS-1$
+                        configObj.addProperty("applicationId", config.getAttribute( //$NON-NLS-1$
+                                RuntimeDebugLaunchLifecycleBridge.ATTR_APPLICATION_ID, "")); //$NON-NLS-1$
                         availableConfigs.add(configObj);
                     }
                     catch (CoreException e)
@@ -328,57 +338,20 @@ public class DebugLaunchTool implements IMcpTool
                     ", project=" + projectName +  //$NON-NLS-1$
                     ", application=" + applicationId); //$NON-NLS-1$
             
-            // Launch must be done on UI thread
-            final boolean[] launchSuccess = {false};
-            final String[] launchError = {null};
-            
-            Display display = Display.getDefault();
-            if (display != null && !display.isDisposed())
+            JsonObject launchResult = RuntimeDebugLaunchLifecycleBridge.launchDebugConfigurationBounded(configToLaunch,
+                    launchTimeoutSeconds);
+            launchResult.addProperty("project", projectName); //$NON-NLS-1$
+            launchResult.addProperty("applicationId", applicationId); //$NON-NLS-1$
+            launchResult.addProperty("launchConfiguration", configName); //$NON-NLS-1$
+            launchResult.addProperty("mode", "debug"); //$NON-NLS-1$ //$NON-NLS-2$
+            launchResult.add("latestLaunchSnapshot", RuntimeDebugLaunchLifecycleBridge //$NON-NLS-1$
+                    .snapshotLaunches(projectName, applicationId));
+            if (launchResult.has("success") && launchResult.get("success").getAsBoolean()) //$NON-NLS-1$ //$NON-NLS-2$
             {
-                display.syncExec(() -> {
-                    try
-                    {
-                        // Use DebugUITools for proper debug launch
-                        org.eclipse.debug.ui.DebugUITools.launch(configToLaunch, ILaunchManager.DEBUG_MODE);
-                        launchSuccess[0] = true;
-                    }
-                    catch (Exception e)
-                    {
-                        Activator.logError("Error launching debug session", e); //$NON-NLS-1$
-                        launchError[0] = e.getMessage();
-                    }
-                });
+                launchResult.addProperty("message", //$NON-NLS-1$
+                        "Debug launch request accepted; call wait_debug_session or list_debug_sessions for attach readiness"); //$NON-NLS-1$
             }
-            else
-            {
-                // Fallback - direct launch without UI
-                try
-                {
-                    configToLaunch.launch(ILaunchManager.DEBUG_MODE, null);
-                    launchSuccess[0] = true;
-                }
-                catch (CoreException e)
-                {
-                    Activator.logError("Error launching debug session", e); //$NON-NLS-1$
-                    launchError[0] = e.getMessage();
-                }
-            }
-            
-            if (launchSuccess[0])
-            {
-                return ToolResult.success()
-                    .put("project", projectName) //$NON-NLS-1$
-                    .put("applicationId", applicationId) //$NON-NLS-1$
-                    .put("launchConfiguration", configName) //$NON-NLS-1$
-                    .put("mode", "debug") //$NON-NLS-1$ //$NON-NLS-2$
-                    .put("message", "Debug session started successfully") //$NON-NLS-1$ //$NON-NLS-2$
-                    .toJson();
-            }
-            else
-            {
-                return ToolResult.error("Failed to launch debug session" + //$NON-NLS-1$
-                        (launchError[0] != null ? ": " + launchError[0] : "")).toJson(); //$NON-NLS-1$ //$NON-NLS-2$
-            }
+            return launchResult.toString();
         }
         catch (CoreException e)
         {

@@ -3,9 +3,9 @@
 
 Этот файл генерируется из `tools/impl/*Tool.java` и `McpResourceRegistry.java` и служит fast reference для Codex.
 
-- Tool implementations found: `68`
-- Tool names documented in `README.md`: `68`
-- Tools with discovery annotations: `32`
+- Tool implementations found: `71`
+- Tool names documented in `README.md`: `71`
+- Tools with discovery annotations: `35`
 - Static MCP resources found: `8`
 - Drift status: `missing_in_readme=0`, `missing_in_code=0`
 
@@ -56,6 +56,7 @@
 | `get_test_session_status` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GetTestSessionStatusTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/GetTestSessionStatusToolTest.java` | `read/discovery` | - |
 | `go_to_definition` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/GoToDefinitionTool.java` | `-` | `analysis/navigation` | - |
 | `list_debug_breakpoints` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListDebugBreakpointsTool.java` | `-` | `read/discovery` | - |
+| `list_debug_launches` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListDebugLaunchesTool.java` | `-` | `read/discovery` | - |
 | `list_debug_sessions` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListDebugSessionsTool.java` | `-` | `read/discovery` | - |
 | `list_infobase_extensions` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListInfobaseExtensionsTool.java` | `-` | `read/discovery` | - |
 | `list_modules` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ListModulesTool.java` | `-` | `read/discovery` | - |
@@ -77,8 +78,10 @@
 | `run_unit_tests` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/RunUnitTestsTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/RunUnitTestsToolTest.java` | `mixed` | - |
 | `search_in_code` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/SearchInCodeTool.java` | `-` | `mixed` | - |
 | `set_debug_breakpoint` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/SetDebugBreakpointTool.java` | `-` | `mixed` | - |
+| `terminate_debug_launch` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/TerminateDebugLaunchTool.java` | `-` | `mixed` | - |
 | `update_database` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/UpdateDatabaseTool.java` | `-` | `long-running-runtime` | `docs/agent/long-running-ops.md` |
 | `validate_query` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/ValidateQueryTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/ValidateQueryToolTest.java` | `analysis/navigation` | - |
+| `wait_debug_session` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/WaitDebugSessionTool.java` | `-` | `mixed` | - |
 | `wait_task` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/WaitTaskTool.java` | `-` | `mixed` | - |
 | `write_module_source` | `mcp/bundles/com.ditrix.edt.mcp.server/src/com/ditrix/edt/mcp/server/tools/impl/WriteModuleSourceTool.java` | `mcp/tests/com.ditrix.edt.mcp.server.tests/src/com/ditrix/edt/mcp/server/tools/impl/WriteModuleSourceToolTest.java` | `mutation/refactoring` | - |
 
@@ -105,6 +108,7 @@
 | `get_test_run_report` | `Read YAxUnit run report` |
 | `get_test_session_status` | `Inspect YAxUnit session status` |
 | `list_debug_breakpoints` | `List BSL debug breakpoints` |
+| `list_debug_launches` | `List runtime debug launches` |
 | `list_debug_sessions` | `List runtime debug sessions` |
 | `list_infobase_extensions` | `List installed infobase extensions` |
 | `list_tasks` | `List session tasks` |
@@ -119,6 +123,8 @@
 | `run_to_debug_breakpoint` | `Run to debug breakpoint` |
 | `run_unit_tests` | `Run YAxUnit unit tests` |
 | `set_debug_breakpoint` | `Set BSL debug breakpoint` |
+| `terminate_debug_launch` | `Terminate runtime debug launch` |
+| `wait_debug_session` | `Wait for runtime debug session` |
 | `wait_task` | `Wait for task terminal state` |
 
 ## MCP Resource Map

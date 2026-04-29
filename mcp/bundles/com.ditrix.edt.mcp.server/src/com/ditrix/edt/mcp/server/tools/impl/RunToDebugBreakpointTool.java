@@ -15,6 +15,7 @@ import com.ditrix.edt.mcp.server.protocol.ToolResult;
 import com.ditrix.edt.mcp.server.tools.IMcpTool;
 import com.ditrix.edt.mcp.server.tools.ToolAnnotations;
 import com.ditrix.edt.mcp.server.tools.debug.RuntimeDebugBreakpointBridge;
+import com.ditrix.edt.mcp.server.tools.debug.RuntimeDebugLaunchLifecycleBridge;
 import com.ditrix.edt.mcp.server.tools.debug.RuntimeDebugModelBridge;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -91,6 +92,17 @@ public class RunToDebugBreakpointTool implements IMcpTool
             return ToolResult.error("threadId or applicationId is required") //$NON-NLS-1$
                     .put("reason", "debug_target_required") //$NON-NLS-1$ //$NON-NLS-2$
                     .toJson();
+        }
+        if ((threadId == null || threadId.isEmpty()) && applicationId != null && !applicationId.isEmpty())
+        {
+            JsonObject duplicatePreflight = RuntimeDebugLaunchLifecycleBridge.duplicateLaunchPreflight(projectName,
+                    applicationId);
+            if (!isSuccess(duplicatePreflight))
+            {
+                duplicatePreflight.addProperty("tool", NAME); //$NON-NLS-1$
+                duplicatePreflight.addProperty("startMode", "launch"); //$NON-NLS-1$ //$NON-NLS-2$
+                return duplicatePreflight.toString();
+            }
         }
 
         JsonObject breakpointResult = parse(RuntimeDebugBreakpointBridge.setBreakpoint(projectName, modulePath,
